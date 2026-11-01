@@ -1,0 +1,123 @@
+// Textos de la pantalla en los 4 idiomas de SolderTrace (en, es, fr, pt-BR).
+// El idioma lo elige el admin del cliente para cada bascula en el portal.
+#pragma once
+#include <Arduino.h>
+
+enum Txt {
+  T_STARTING, T_WIFI_SETUP, T_WIFI_SETUP_HINT1, T_WIFI_SETUP_HINT2, T_WIFI_PASSWORD,
+  T_WAIT_TIME, T_WAIT_TIME_HINT, T_CONNECTING, T_OFFLINE, T_PAIR_TITLE, T_PAIR_HINT1, T_PAIR_HINT2,
+  T_DISABLED, T_DISABLED_HINT, T_REQUEST_ACT, T_REQUEST_SENT, T_REQUEST_REJECTED,
+  T_READY, T_READY_HINT, T_NO_SCALE, T_NO_SCALE_HINT,
+  T_EMPTY_SCALE, T_PLACE_JAR, T_HOLD_STILL, T_SENDING, T_SAVED_OFFLINE,
+  T_RESULT_OK, T_RESULT_OUT, T_RESULT_HOLD, T_REMOVE_JAR, T_CANCEL, T_CANCELLED, T_TIMEOUT,
+  T_EXPECTED, T_LAST, T_MODE_REMOVE, T_MODE_RETURN, T_MODE_RECEIVE, T_MODE_CHECK,
+  T_UPDATING, T_UPDATE_FAIL, T_MENU, T_MENU_WIFI, T_MENU_INFO, T_MENU_RESTART, T_BACK,
+  T_SERVER, T_CONNECTED, T_NOT_CONNECTED, T_PENDING, T_LIVE, T_ERROR,
+  T_COUNT
+};
+
+// 0 en, 1 es, 2 fr, 3 pt-BR
+static const char* const TXT[T_COUNT][4] = {
+  {"Starting", "Iniciando", "Démarrage", "Iniciando"},
+  {"Wi-Fi setup", "Configurar WiFi", "Config. Wi-Fi", "Configurar Wi-Fi"},
+  {"On your phone, join the network:", "En el móvil, conéctate a la red:", "Sur le téléphone, rejoignez :", "No celular, conecte-se à rede:"},
+  {"then open http://192.168.4.1", "y abre http://192.168.4.1", "puis ouvrez http://192.168.4.1", "e abra http://192.168.4.1"},
+  {"Password:", "Contraseña:", "Mot de passe :", "Senha:"},
+  {"Waiting for Wi-Fi and time", "Esperando WiFi y hora", "Attente Wi-Fi et heure", "Aguardando Wi-Fi e hora"},
+  {"Weighing starts when ready", "Se podrá pesar al tenerlos", "Pesée possible ensuite", "Pesagem liberada em seguida"},
+  {"Connecting to SolderTrace", "Conectando a SolderTrace", "Connexion à SolderTrace", "Conectando ao SolderTrace"},
+  {"Offline: weighing needs SolderTrace", "Sin conexión: pesar necesita SolderTrace", "Hors ligne : pesée impossible", "Offline: pesagem precisa do SolderTrace"},
+  {"Pairing code", "Código de alta", "Code d'appairage", "Código de pareamento"},
+  {"SolderTrace > Scales > Add scale", "SolderTrace > Básculas > Añadir", "SolderTrace > Balances > Ajouter", "SolderTrace > Balanças > Adicionar"},
+  {"Enter this code to register it", "Escribe este código para darla de alta", "Saisissez ce code pour l'enregistrer", "Digite este código para registrá-la"},
+  {"SCALE DISABLED", "BÁSCULA DESACTIVADA", "BALANCE DÉSACTIVÉE", "BALANÇA DESATIVADA"},
+  {"Please activate it in SolderTrace", "Actívala en SolderTrace, por favor", "Activez-la dans SolderTrace", "Ative-a no SolderTrace, por favor"},
+  {"REQUEST ACTIVATION", "PEDIR ACTIVACIÓN", "DEMANDER ACTIVATION", "PEDIR ATIVAÇÃO"},
+  {"Request sent", "Solicitud enviada", "Demande envoyée", "Solicitação enviada"},
+  {"Request rejected", "Solicitud rechazada", "Demande refusée", "Solicitação recusada"},
+  {"READY", "LISTA", "PRÊTE", "PRONTA"},
+  {"Scan a jar in SolderTrace", "Escanea un envase en SolderTrace", "Scannez un pot dans SolderTrace", "Escaneie um pote no SolderTrace"},
+  {"NO SCALE DATA", "SIN DATOS DE BALANZA", "PAS DE DONNÉES", "SEM DADOS DA BALANÇA"},
+  {"Check RS-232 cable and power", "Revisa el cable RS-232 y la luz", "Vérifiez le câble RS-232", "Verifique o cabo RS-232"},
+  {"Empty the scale", "Vacía la balanza", "Videz la balance", "Esvazie a balança"},
+  {"Place jar", "Pon el envase", "Posez le pot", "Coloque o pote"},
+  {"Hold still...", "Quieto...", "Ne bougez pas...", "Aguarde..."},
+  {"Sending...", "Enviando...", "Envoi...", "Enviando..."},
+  {"Saved - will send when online", "Guardado - se enviará al conectar", "Enregistré - envoi à la reconnexion", "Salvo - envia ao reconectar"},
+  {"WEIGHT OK", "PESO OK", "POIDS OK", "PESO OK"},
+  {"OUT OF RANGE", "FUERA DE RANGO", "HORS TOLÉRANCE", "FORA DA FAIXA"},
+  {"Jar on hold: supervisor approval", "Envase retenido: aprueba supervisor", "Pot bloqué : accord superviseur", "Pote retido: aprovação supervisor"},
+  {"Remove the jar", "Retira el envase", "Retirez le pot", "Retire o pote"},
+  {"CANCEL", "CANCELAR", "ANNULER", "CANCELAR"},
+  {"Cancelled", "Cancelado", "Annulé", "Cancelado"},
+  {"Time out", "Tiempo agotado", "Délai dépassé", "Tempo esgotado"},
+  {"Expected", "Esperado", "Attendu", "Esperado"},
+  {"Last", "Último", "Dernier", "Último"},
+  {"Fridge out", "Salida de nevera", "Sortie frigo", "Saída da geladeira"},
+  {"Back to fridge", "Vuelta a nevera", "Retour frigo", "Volta à geladeira"},
+  {"Receiving", "Recepción", "Réception", "Recebimento"},
+  {"Check weight", "Control de peso", "Contrôle de poids", "Conferir peso"},
+  {"UPDATING", "ACTUALIZANDO", "MISE À JOUR", "ATUALIZANDO"},
+  {"Update failed: keeps current version", "Falló: sigue la versión actual", "Échec : version actuelle conservée", "Falhou: mantém a versão atual"},
+  {"Settings", "Ajustes", "Réglages", "Ajustes"},
+  {"WI-FI", "WIFI", "WI-FI", "WI-FI"},
+  {"INFO", "INFO", "INFO", "INFO"},
+  {"RESTART", "REINICIAR", "REDÉMARRER", "REINICIAR"},
+  {"BACK", "VOLVER", "RETOUR", "VOLTAR"},
+  {"Server", "Servidor", "Serveur", "Servidor"},
+  {"connected", "conectado", "connecté", "conectado"},
+  {"not connected", "sin conexión", "non connecté", "sem conexão"},
+  {"pending", "pendientes", "en attente", "pendentes"},
+  {"live", "en vivo", "en direct", "ao vivo"},
+  {"Error", "Error", "Erreur", "Erro"},
+};
+
+extern int langIdx;   // 0..3
+
+inline int langIndexOf(const char* code) {
+  if (!code) return 0;
+  if (!strncasecmp(code, "es", 2)) return 1;
+  if (!strncasecmp(code, "fr", 2)) return 2;
+  if (!strncasecmp(code, "pt", 2)) return 3;
+  return 0;
+}
+
+inline const char* tr(Txt t) { return TXT[t][langIdx]; }
+
+// La fuente de la pantalla es CP437 (gfx->cp437(true)): se pasan los acentos de UTF-8 a CP437.
+// Los que no existen en CP437 (ã, õ, Ã, Õ, À, Ê, Ô...) se cambian por la letra sin acento.
+inline void toCp437(const char* in, char* out, size_t n) {
+  size_t o = 0;
+  const unsigned char* s = (const unsigned char*)in;
+  while (*s && o + 1 < n) {
+    unsigned char c = *s++;
+    if (c < 0x80) { out[o++] = (char)c; continue; }
+    unsigned int cp = 0;
+    if ((c & 0xE0) == 0xC0 && *s) { cp = ((c & 0x1F) << 6) | (*s++ & 0x3F); }
+    else { while ((*s & 0xC0) == 0x80) s++; out[o++] = '?'; continue; }
+    char m;
+    switch (cp) {
+      case 0xE1: m = (char)0xA0; break;  case 0xE9: m = (char)0x82; break;  case 0xED: m = (char)0xA1; break;
+      case 0xF3: m = (char)0xA2; break;  case 0xFA: m = (char)0xA3; break;  case 0xF1: m = (char)0xA4; break;
+      case 0xD1: m = (char)0xA5; break;  case 0xE7: m = (char)0x87; break;  case 0xC7: m = (char)0x80; break;
+      case 0xE2: m = (char)0x83; break;  case 0xE0: m = (char)0x85; break;  case 0xEA: m = (char)0x88; break;
+      case 0xE8: m = (char)0x8A; break;  case 0xEB: m = (char)0x89; break;  case 0xEE: m = (char)0x8C; break;
+      case 0xEF: m = (char)0x8B; break;  case 0xF4: m = (char)0x93; break;  case 0xFB: m = (char)0x96; break;
+      case 0xF9: m = (char)0x97; break;  case 0xFC: m = (char)0x81; break;  case 0xC9: m = (char)0x90; break;
+      case 0xE3: m = 'a'; break;  case 0xF5: m = 'o'; break;  case 0xC1: case 0xC0: case 0xC2: case 0xC3: m = 'A'; break;
+      case 0xCA: case 0xC8: m = 'E'; break;  case 0xCD: m = 'I'; break;  case 0xD3: case 0xD4: case 0xD5: m = 'O'; break;
+      case 0xDA: m = 'U'; break;  case 0xBA: m = (char)0xA7; break;  case 0xAA: m = (char)0xA6; break;
+      case 0xB0: m = (char)0xF8; break;
+      default: m = '?';
+    }
+    out[o++] = m;
+  }
+  out[o] = 0;
+}
+
+// Ancho en pixeles de un texto UTF-8 con la fuente 6x8 escalada
+inline int textWidth(const char* utf8, uint8_t size) {
+  int n = 0;
+  for (const unsigned char* s = (const unsigned char*)utf8; *s; s++) if ((*s & 0xC0) != 0x80) n++;
+  return n * 6 * size;
+}
