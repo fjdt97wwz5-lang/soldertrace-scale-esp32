@@ -1,0 +1,21 @@
+Firmware bascula SolderTrace st-2026.11.01a (Waveshare ESP32-S3-Touch-LCD-2 + balanza Rhuisan RS-232).
+Compilado con core esp32 3.3.2, GFX Library for Arduino 1.6.4, WebSockets 2.7.3, ArduinoJson 7.4.2.
+ESP32S3 Dev Module, Flash 16MB, PSRAM OPI, USB CDC On Boot Enabled, partitions.csv del sketch.
+
+LA PRIMERA VEZ, POR CABLE (Chrome o Edge: https://espressif.github.io/esptool-js/ , 921600 baud):
+  Opcion 1, un solo archivo:
+    0x0      soldertrace_scale_st-2026.11.01a_completo.bin
+  Opcion 2, por partes:
+    0x0      soldertrace_scale.ino.bootloader.bin
+    0x8000   soldertrace_scale.ino.partitions.bin
+    0xe000   boot_app0.bin
+    0x10000  soldertrace_scale_st-2026.11.01a.bin
+  Si la placa no aparece: manten BOOT, pulsa y suelta RESET, suelta BOOT. Al terminar, pulsa RESET.
+  Si la placa venia de una dosificadora, pulsa antes "Erase Flash" para empezar limpia.
+
+DESPUES, POR WIFI (OTA): desde el portal, Scales > Update firmware, con soldertrace_scale_<version>.bin
+
+AL ARRANCAR: sin WiFi guardada crea la red SolderTrace-XXXX con la contrasena en pantalla.
+Conectate desde el movil, elige la WiFi del cliente y el idioma. Luego muestra un codigo de 6 digitos
+para darla de alta en el portal (Scales > Add scale), que le asigna su numero B1, B2...
+md5 de cada archivo en md5.txt.

@@ -14,9 +14,12 @@ VER=$(grep -oP 'FW_VERSION\s+"\K[^"]+' soldertrace_scale/config.h)
 OUT=binarios/$VER
 mkdir -p "$OUT"
 cp build/soldertrace_scale.ino.bin "$OUT/soldertrace_scale_$VER.bin"
-cp build/soldertrace_scale.ino.merged.bin "$OUT/soldertrace_scale_${VER}_completo.bin"
 cp build/soldertrace_scale.ino.bootloader.bin build/soldertrace_scale.ino.partitions.bin "$OUT/"
 BOOT=$(ls "$ARDUINO_DIRECTORIES_DATA"/packages/esp32/hardware/esp32/*/tools/partitions/boot_app0.bin | head -1)
 cp "$BOOT" "$OUT/boot_app0.bin"
+# Un solo archivo para grabar en 0x0 (sin rellenar los 16 MB)
+ESPTOOL=$(ls "$ARDUINO_DIRECTORIES_DATA"/packages/esp32/tools/esptool_py/*/esptool | head -1)
+"$ESPTOOL" --chip esp32s3 merge-bin -o "$OUT/soldertrace_scale_${VER}_completo.bin" --flash-mode dio --flash-freq 80m --flash-size 16MB \
+  0x0 "$OUT/soldertrace_scale.ino.bootloader.bin" 0x8000 "$OUT/soldertrace_scale.ino.partitions.bin" 0xe000 "$OUT/boot_app0.bin" 0x10000 "$OUT/soldertrace_scale_$VER.bin"
 ( cd "$OUT" && md5sum *.bin > md5.txt )
 echo "Listo: $OUT"
