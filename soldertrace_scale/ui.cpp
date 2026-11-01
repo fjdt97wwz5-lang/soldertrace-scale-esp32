@@ -357,7 +357,6 @@ void uiBegin() {
   pinMode(SD_CS, OUTPUT);
   digitalWrite(SD_CS, HIGH);   // la microSD comparte el SPI
   gfx->begin();
-  gfx->cp437(true);
   pinMode(LCD_BL, OUTPUT);
   digitalWrite(LCD_BL, HIGH);
   pinMode(TP_INT, INPUT_PULLUP);
