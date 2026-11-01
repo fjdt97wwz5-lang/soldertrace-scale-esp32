@@ -55,4 +55,13 @@
 #define RESULT_HOLD_MS      30000UL    // el resultado se ve hasta quitar el envase (max 30 s)
 #define QUEUE_MAX           400        // pesajes guardados sin conexion
 
+// Limites del tiempo de estabilidad (la ventana de scale.cpp cubre hasta 256 x 50 ms = 12,8 s)
+#define STABLE_MS_MIN       500UL
+#define STABLE_MS_MAX       10000UL
+
+// Conexion con el portal: reintento cada 15 s, que sube a 30 s y 60 s si sigue sin servidor
+#define WS_RETRY_MIN_MS     15000UL
+#define WS_RETRY_MAX_MS     60000UL
+#define MARK_VALID_AFTER_MS 600000UL   // version nueva: se da por buena al conectar o tras 10 min con WiFi
+
 // Particiones: mismo partitions.csv que las dosificadoras (2 x 3 MB de programa para OTA)

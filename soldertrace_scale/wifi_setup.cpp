@@ -3,6 +3,8 @@
 #include "config.h"
 #include "store.h"
 #include "lang.h"
+#include "ota.h"
+#include "link.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -12,6 +14,8 @@ static WebServer* web = nullptr;
 static DNSServer* dns = nullptr;
 static bool inSetup = false;
 static unsigned long setupSince = 0;
+static unsigned long noWifiSince = 0, lastTry = 0;
+static int tries = 0;
 
 static String htmlEscape(const String& s) {
   String o;
@@ -22,16 +26,17 @@ static String htmlEscape(const String& s) {
   return o;
 }
 
+// La busqueda de redes se hace al entrar y con el enlace "buscar otra vez": buscar en cada visita
+// saca al movil de la red de la bascula mientras se rellena el formulario.
 static void pageForm() {
   int n = WiFi.scanComplete();
-  if (n == WIFI_SCAN_FAILED) { WiFi.scanNetworks(true); n = 0; }
   String opts;
   for (int i = 0; i < n; i++) {
     String s = WiFi.SSID(i);
     if (!s.length() || opts.indexOf("value=\"" + htmlEscape(s) + "\"") >= 0) continue;
     opts += "<option value=\"" + htmlEscape(s) + "\">" + htmlEscape(s) + " (" + String(WiFi.RSSI(i)) + " dBm)</option>";
   }
-  if (n >= 0) { WiFi.scanDelete(); WiFi.scanNetworks(true); }
+  const char* scanNote = n == WIFI_SCAN_RUNNING ? "Searching... reload in a few seconds" : (n < 0 ? "Search failed" : "");
   const char* langs[4][2] = {{"en", "English"}, {"es", "Español"}, {"fr", "Français"}, {"pt-BR", "Português (Brasil)"}};
   String lsel;
   for (auto& l : langs) lsel += String("<option value=\"") + l[0] + "\"" + (langIndexOf(cfg.lang) == langIndexOf(l[0]) ? " selected" : "") + ">" + l[1] + "</option>";
@@ -45,28 +50,47 @@ static void pageForm() {
     "<form method=post action=/save>"
     "<label>Wi-Fi (2.4 GHz)</label><select name=ssid_l onchange=\"document.getElementsByName('ssid')[0].value=this.value\">"
     "<option value=''>--</option>" + opts + "</select>"
+    "<p><small>" + scanNote + " <a href=/scan style='color:#9fd8b8'>Search again</a></small></p>"
     "<input name=ssid maxlength=32 placeholder='Network name' value=\"" + htmlEscape(cfg.wifiSsid) + "\">"
     "<label>Password</label><input name=pass type=password maxlength=64 placeholder='(unchanged if empty)'>"
     "<label>Language / Idioma / Langue / Idioma</label><select name=lang>" + lsel + "</select>"
-    "<details><summary><small>Advanced</small></summary><label>Server</label><input name=url maxlength=127 value=\"" +
+    "<details><summary><small>Advanced</small></summary><label>Server (wss://...)</label><input name=url maxlength=127 value=\"" +
     htmlEscape(cfg.serverUrl) + "\"></details>"
     "<button>Save and restart</button></form><p><small>MAC " + String(macStr) + " · " FW_VERSION "</small></p></body></html>";
   web->send(200, "text/html; charset=utf-8", h);
+}
+
+static void pageScan() {
+  WiFi.scanDelete();
+  WiFi.scanNetworks(true);
+  web->sendHeader("Location", "/");
+  web->send(303, "text/plain", "");
 }
 
 static void pageSave() {
   String ssid = web->arg("ssid"), pass = web->arg("pass"), url = web->arg("url"), lang = web->arg("lang");
   ssid.trim(); url.trim();
   if (!ssid.length() || ssid.length() > 32) { web->send(400, "text/plain", "Wi-Fi name required"); return; }
-  if (url.length() && !(url.startsWith("wss://") || url.startsWith("ws://"))) { web->send(400, "text/plain", "Server must start with wss://"); return; }
+  if (url.length() && (url.length() >= sizeof(cfg.serverUrl) || !linkUrlValid(url.c_str()))) {
+    web->send(400, "text/plain", "Server must be wss://host[:port]/path");
+    return;
+  }
   bool sameNet = ssid == cfg.wifiSsid;
   strlcpy(cfg.wifiSsid, ssid.c_str(), sizeof(cfg.wifiSsid));
   if (pass.length() || !sameNet) strlcpy(cfg.wifiPass, pass.c_str(), sizeof(cfg.wifiPass));
-  if (url.length()) strlcpy(cfg.serverUrl, url.c_str(), sizeof(cfg.serverUrl));
+  if (url.length() && url != cfg.serverUrl) {
+    // otro servidor: la llave de alta era del anterior y no se le manda; hay que dar de alta otra vez
+    strlcpy(cfg.serverUrl, url.c_str(), sizeof(cfg.serverUrl));
+    cfg.token[0] = 0;
+    cfg.number = 0;
+    cfg.name[0] = 0;
+    cfg.enabled = true;
+  }
   if (lang.length()) strlcpy(cfg.lang, lang.c_str(), sizeof(cfg.lang));
   storeSave();
   web->send(200, "text/html; charset=utf-8", "<meta name=viewport content='width=device-width'><body style='font-family:sans-serif'><h2>Saved. The scale restarts now.</h2></body>");
   delay(1200);
+  otaMarkValid();   // reinicio pedido por el usuario: la version funciona
   ESP.restart();
 }
 
@@ -77,8 +101,11 @@ void wifiStartSetup() {
   WiFi.disconnect(true);
   delay(100);
   WiFi.mode(WIFI_AP_STA);
-  // contrasena de 8 cifras nueva cada vez, se ve en la pantalla
-  snprintf(apPassword, sizeof(apPassword), "%08lu", (unsigned long)(esp_random() % 100000000UL));
+  // contrasena de 10 caracteres nueva cada vez, se ve en la pantalla. Sin 0/O/1/I/l para leerla
+  // sin dudas y en mayusculas para escribirla facil en el movil (32 simbolos: 50 bits).
+  static const char ALPHA[] = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  for (int i = 0; i < 10; i++) apPassword[i] = ALPHA[esp_random() % (sizeof(ALPHA) - 1)];
+  apPassword[10] = 0;
   WiFi.softAP(apSsid, apPassword);
   WiFi.scanNetworks(true);
   dns = new DNSServer();
@@ -86,6 +113,7 @@ void wifiStartSetup() {
   web = new WebServer(80);
   web->on("/", HTTP_GET, pageForm);
   web->on("/save", HTTP_POST, pageSave);
+  web->on("/scan", HTTP_GET, pageScan);
   web->onNotFound(pageForm);   // portal cautivo: cualquier direccion abre el formulario
   web->begin();
   Serial.print("Modo configuracion WiFi: red "); Serial.print(apSsid); Serial.print("  clave "); Serial.println(apPassword);
@@ -104,16 +132,19 @@ void wifiBegin() {
 
 bool wifiConnected() { return !inSetup && WiFi.status() == WL_CONNECTED; }
 
+unsigned long wifiDownFor() {
+  if (inSetup || !cfg.wifiSsid[0] || WiFi.status() == WL_CONNECTED || noWifiSince == 0) return 0;
+  return millis() - noWifiSince;
+}
+
 void wifiLoop() {
   if (inSetup) {
     dns->processNextRequest();
     web->handleClient();
     // 15 min sin guardar y con WiFi guardada: vuelve solo a trabajar
-    if (cfg.wifiSsid[0] && millis() - setupSince > 15UL * 60UL * 1000UL) ESP.restart();
+    if (cfg.wifiSsid[0] && millis() - setupSince > 15UL * 60UL * 1000UL) { otaMarkValid(); ESP.restart(); }
     return;
   }
-  static unsigned long noWifiSince = 0, lastTry = 0;
-  static int tries = 0;
   if (WiFi.status() == WL_CONNECTED) { noWifiSince = 0; tries = 0; return; }
   unsigned long now = millis();
   if (noWifiSince == 0) { noWifiSince = now; lastTry = now; return; }

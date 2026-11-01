@@ -36,3 +36,4 @@ void linkSendActivationRequest();
 void linkSendOtaStatus(const char* phase, int progress, const char* err);
 void linkFlushQueue();    // manda los pesajes pendientes
 void linkRestart();       // tras cambiar el servidor
+bool linkUrlValid(const char* url);   // wss://host[:puerto]/ruta que la bascula acepta

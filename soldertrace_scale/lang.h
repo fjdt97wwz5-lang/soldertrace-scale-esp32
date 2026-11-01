@@ -13,6 +13,7 @@ enum Txt {
   T_EXPECTED, T_LAST, T_MODE_REMOVE, T_MODE_RETURN, T_MODE_RECEIVE, T_MODE_CHECK,
   T_UPDATING, T_UPDATE_FAIL, T_MENU, T_MENU_WIFI, T_MENU_INFO, T_MENU_RESTART, T_BACK,
   T_SERVER, T_CONNECTED, T_NOT_CONNECTED, T_PENDING, T_LIVE, T_ERROR,
+  T_EXIT_SETUP, T_WIFI_FAIL, T_WIFI_FAIL_HINT,
   T_COUNT
 };
 
@@ -70,6 +71,10 @@ static const char* const TXT[T_COUNT][4] = {
   {"pending", "pendientes", "en attente", "pendentes"},
   {"live", "en vivo", "en direct", "ao vivo"},
   {"Error", "Error", "Erreur", "Erro"},
+  {"EXIT SETUP", "SALIR", "QUITTER", "SAIR"},
+  {"Can't connect to Wi-Fi", "No conecta a la WiFi", "Wi-Fi injoignable", "Sem conexão Wi-Fi"},
+  {"Hold the top bar 3 s, then WI-FI", "Mantén pulsada la barra de arriba 3 s y elige WIFI",
+   "Appuyez 3 s sur la barre du haut, puis WI-FI", "Segure a barra superior 3 s e toque em WI-FI"},
 };
 
 extern int langIdx;   // 0..3
@@ -84,7 +89,8 @@ inline int langIndexOf(const char* code) {
 
 inline const char* tr(Txt t) { return TXT[t][langIdx]; }
 
-// La fuente de la pantalla es CP437 (gfx->cp437(true)): se pasan los acentos de UTF-8 a CP437.
+// La fuente clasica de Arduino_GFX (glcdfont, 6x8) sigue la tabla CP437 completa (sin el desfase
+// de 176 de Adafruit_GFX, no hace falta cp437(true)): se pasan los acentos de UTF-8 a CP437.
 // Los que no existen en CP437 (ã, õ, Ã, Õ, À, Ê, Ô...) se cambian por la letra sin acento.
 inline void toCp437(const char* in, char* out, size_t n) {
   size_t o = 0;

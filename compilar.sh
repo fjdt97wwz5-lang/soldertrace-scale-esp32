@@ -7,7 +7,9 @@ cd "$(dirname "$0")"
 export ARDUINO_DIRECTORIES_DATA=${ARDUINO_DIRECTORIES_DATA:-/tmp/acli/data} ARDUINO_DIRECTORIES_USER=${ARDUINO_DIRECTORIES_USER:-/tmp/acli/user}
 CLI=${ARDUINO_CLI:-arduino-cli}
 VER=$(grep -oP 'FW_VERSION\s+"\K[^"]+' soldertrace_scale/config.h)
+# WEBSOCKETS_TCP_TIMEOUT=2000: cada intento de conexion con el portal bloquea como mucho ~2 s (la libreria trae 5 s)
 "$CLI" compile -b "esp32:esp32:esp32s3:FlashSize=16M,PSRAM=opi,CDCOnBoot=cdc,PartitionScheme=custom" \
+  --build-property "compiler.cpp.extra_flags=-DWEBSOCKETS_TCP_TIMEOUT=2000" \
   ${CTAGS:+--build-property "runtime.tools.ctags.path=$CTAGS"} --output-dir build soldertrace_scale
 OUT=binarios/$VER
 mkdir -p "$OUT"

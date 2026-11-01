@@ -3,6 +3,8 @@
 //  - LittleFS /q.bin: pesajes hechos sin conexion (cola). Se reenvian al volver la conexion.
 //    Un pesaje solo sale de la cola cuando el servidor confirma que lo grabo ("confirmado hasta").
 //    El "confirmado hasta" se escribe rotando entre 8 posiciones para no gastar siempre la misma celda.
+//    Los numeros pendientes se llevan tambien en RAM (contar no lee el archivo) y el archivo se
+//    reescribe sin los confirmados (/q.tmp + rename, seguro ante un corte de luz).
 #pragma once
 #include <Arduino.h>
 
@@ -38,6 +40,7 @@ void storeBegin();
 void storeSave();            // guarda cfg
 void storeClearPairing();
 uint32_t queueAdd(const char* requestId, float grams, bool stable);
-int  queueCount();
-bool queueGet(int i, QueuedReading& r);   // i-esimo pendiente (orden de seq)
+int  queueCount();                        // pendientes (RAM, no lee el archivo)
+int  queueCountUpTo(uint32_t seq);        // pendientes con numero <= seq (RAM)
+int  queueRead(uint32_t afterSeq, QueuedReading* out, int max);  // pendientes con numero > afterSeq, en orden, una pasada
 void queueAck(uint32_t upTo);

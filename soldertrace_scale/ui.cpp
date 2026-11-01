@@ -28,6 +28,9 @@ static int drawnScreen = -1;
 static uint32_t drawnHash = 0;
 static uint16_t headColor = BLUE;
 static bool forceAll = true;
+static const unsigned long WIFI_HINT_MS = 120000UL;   // 2 min sin WiFi: se explica como entrar a configurarla
+
+static bool wifiHint() { return wifiDownFor() > WIFI_HINT_MS; }
 
 // ---------- texto ----------
 static void txt(const char* utf8, int x, int y, uint8_t size, uint16_t fg, uint16_t bg) {
@@ -92,7 +95,7 @@ static void header(const char* title, uint16_t color) {
   gfx->fillRect(0, 0, W, HEAD, color);
   txtFit(title, 8, 9, 2, 130, FG, color);
   if (cfg.number > 0) {
-    char id[6]; snprintf(id, sizeof(id), "B%d", cfg.number);
+    char id[12]; snprintf(id, sizeof(id), "B%d", cfg.number);
     int w = strlen(id) * 12 + 6, x = 206 - w;
     gfx->fillRoundRect(x, 7, w, 20, 4, FG);
     txt(id, x + 3, 10, 2, color, FG);
@@ -155,7 +158,10 @@ static void drawStatic(int s) {
       txtC(line, 104, 2, AMBER, BG);
       txtC(tr(T_WIFI_SETUP_HINT2), 140, 1, DIM, BG);
       snprintf(line, sizeof(line), "MAC %s  %s", macStr, FW_VERSION);
-      txtC(line, 220, 1, DIM, BG);
+      if (cfg.wifiSsid[0]) {             // ya hay WiFi guardada: se puede salir sin cambiar nada
+        txtC(line, 172, 1, DIM, BG);
+        button(BTN_FULL, tr(T_EXIT_SETUP), GRAY, true);
+      } else txtC(line, 220, 1, DIM, BG);
       break;
     case S_WAIT_TIME:
       header("SolderTrace", AMBER);
@@ -167,6 +173,10 @@ static void drawStatic(int s) {
       txtC(tr(T_CONNECTING), 80, 2, FG, BG);
       snprintf(line, sizeof(line), "Wi-Fi: %s", cfg.wifiSsid);
       txtC(line, 120, 1, DIM, BG);
+      if (wifiHint()) {
+        txtC(tr(T_WIFI_FAIL), 150, 2, AMBER, BG);
+        txtC(tr(T_WIFI_FAIL_HINT), 176, 1, FG, BG);
+      }
       break;
     case S_PAIR:
       header("SolderTrace", BLUE);
@@ -228,9 +238,9 @@ static void drawStatic(int s) {
       break;
     }
     case S_OTA:
-      header(tr(T_UPDATING), BLUE);
-      gfx->drawRoundRect(20, 110, 280, 30, 6, FG);
-      if (otaFailed) txtC(tr(T_UPDATE_FAIL), 160, 1, AMBER, BG);
+      header(tr(T_UPDATING), otaFailed ? AMBER : BLUE);
+      if (otaProgress >= 0) gfx->drawRoundRect(20, 110, 280, 30, 6, FG);
+      if (otaFailed) txtC(tr(T_UPDATE_FAIL), 120, 1, AMBER, BG);
       break;
     case S_MENU:
       header(tr(T_MENU), GRAY);
@@ -267,6 +277,7 @@ static uint32_t staticHash(int s) {
   for (const char* p = job.requestId; *p; p++) h = h * 31 + *p;
   for (const char* p = cfg.name; *p; p++) h = h * 31 + *p;
   h ^= (uint32_t)result.kind * 131u ^ (result.show ? 0x55u : 0) ^ (otaFailed ? 0x99u : 0) ^ (linkReady() ? 0x1000u : 0);
+  if (s == S_CONNECTING && wifiHint()) h ^= 0x2000u;
   if (s == S_RESULT) h ^= (uint32_t)(result.grams * 100);
   return h;
 }
@@ -325,6 +336,7 @@ static void onTap(int x, int y) {
     return;
   }
   if (s == S_INFO) { if (inBtn(BTN_FULL, x, y)) infoOpen = false; return; }
+  if (s == S_SETUP_AP) { if (cfg.wifiSsid[0] && inBtn(BTN_FULL, x, y)) appRestart(); return; }   // salir sin cambios
   if ((s == S_JOB_ZERO || s == S_JOB_PLACE || s == S_JOB_HOLD) && inBtn(BTN_FULL, x, y)) { appCancelJob("operator"); return; }
   if (s == S_DISABLED && inBtn(BTN_FULL, x, y) && activationState != 1 && linkReady()) {
     linkSendActivationRequest();

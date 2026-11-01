@@ -6,11 +6,17 @@ static char lineBuf[64];
 static size_t lineLen = 0;
 static bool lineOverflow = false;
 
-// Ventana de estabilidad: lecturas de los ultimos cfgStableMs
-static const int WIN = 64;
-static float winG[WIN];
-static unsigned long winT[WIN];
+// Ventana de estabilidad: lecturas agrupadas en tramos de 50 ms (cada tramo guarda minimo, maximo,
+// suma y si la balanza dijo "US"), asi la ventana cubre el tiempo pedido sea cual sea la velocidad
+// de la balanza: 256 tramos x 50 ms = 12,8 s >= STABLE_MS_MAX.
+static const int WIN = 256;
+static const unsigned long BUCKET_MS = 50;
+static_assert(WIN * BUCKET_MS >= STABLE_MS_MAX, "la ventana de estabilidad no cubre STABLE_MS_MAX");
+struct Bucket { float mn, mx, sum; uint16_t n; bool unstable; unsigned long t; };
+static Bucket win[WIN];
 static int winHead = 0, winCount = 0;
+static Bucket cur;
+static bool curOpen = false;
 
 static bool parseWeight(const char* s, float& out) {
   const char* p = s;
@@ -39,15 +45,25 @@ static bool parseWeight(const char* s, float& out) {
 }
 
 void scaleBegin() {
-  ScaleSerial.setRxBufferSize(1024);
+  ScaleSerial.setRxBufferSize(8192);   // ~8 s a 9600 baudios: aguanta un bloqueo de la conexion
   ScaleSerial.begin(SCALE_BAUD, SERIAL_8N1, PIN_SCALE_RX, PIN_SCALE_TX);
 }
 
-static void pushReading(float g) {
-  winG[winHead] = g;
-  winT[winHead] = millis();
+static void closeBucket() {
+  if (!curOpen) return;
+  win[winHead] = cur;
   winHead = (winHead + 1) % WIN;
   if (winCount < WIN) winCount++;
+  curOpen = false;
+}
+
+static void pushReading(float g, bool unstable) {
+  unsigned long now = millis();
+  if (curOpen && now - cur.t >= BUCKET_MS) closeBucket();
+  if (!curOpen) { cur.mn = cur.mx = g; cur.sum = 0; cur.n = 0; cur.unstable = false; cur.t = now; curOpen = true; }
+  cur.mn = min(cur.mn, g); cur.mx = max(cur.mx, g);
+  cur.sum += g; cur.n++;
+  cur.unstable |= unstable;
 }
 
 void scaleLoop() {
@@ -62,7 +78,7 @@ void scaleLoop() {
           scale.unstableFlag = strstr(lineBuf, "US") != nullptr;
           scale.lastMs = millis();
           scale.has = true;
-          pushReading(scale.unstableFlag ? NAN : g);
+          pushReading(g, scale.unstableFlag);
         }
       }
       lineLen = 0;
@@ -79,20 +95,23 @@ bool scaleOnline() { return scale.has && millis() - scale.lastMs < SCALE_TIMEOUT
 
 bool scaleAtZero() { return scaleOnline() && fabsf(scale.grams) <= cfgZeroTol; }
 
-void scaleResetStable() { winCount = 0; winHead = 0; }
+void scaleResetStable() { winCount = 0; winHead = 0; curOpen = false; }
 
 bool scaleStable(float& g) {
-  if (!scaleOnline() || winCount < 3) return false;
+  if (!scaleOnline()) return false;
   unsigned long now = millis();
   float mn = 1e9f, mx = -1e9f, sum = 0;
   int n = 0;
   unsigned long oldest = now;
-  for (int i = 0; i < winCount; i++) {
-    int k = (winHead - 1 - i + WIN) % WIN;
-    if (now - winT[k] > cfgStableMs) break;
-    if (isnan(winG[k])) return false;      // la balanza dijo inestable dentro de la ventana
-    mn = min(mn, winG[k]); mx = max(mx, winG[k]); sum += winG[k]; n++;
-    oldest = winT[k];
+  // el tramo abierto (lo mas reciente) y luego los cerrados, del mas nuevo al mas viejo
+  for (int i = -1; i < winCount; i++) {
+    const Bucket* b;
+    if (i < 0) { if (!curOpen) continue; b = &cur; }
+    else b = &win[(winHead - 1 - i + WIN) % WIN];
+    if (now - b->t > cfgStableMs) break;
+    if (b->unstable) return false;         // la balanza dijo inestable dentro de la ventana
+    mn = min(mn, b->mn); mx = max(mx, b->mx); sum += b->sum; n += b->n;
+    oldest = b->t;
   }
   // la ventana tiene que cubrir casi todo el tiempo pedido (lecturas continuas)
   if (n < 3 || now - oldest < cfgStableMs * 8 / 10) return false;

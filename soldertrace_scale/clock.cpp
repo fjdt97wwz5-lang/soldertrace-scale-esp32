@@ -92,7 +92,14 @@ void clockLoop() {
 }
 
 void clockFromServer(uint32_t epoch) {
-  if (clockValid() || epoch < 1700000000) return;
+  if (epoch < 1700000000) return;
+  if (clockValid()) {
+    // la hora de internet manda; la del DS3231 (o una anterior del servidor) se corrige si se fue > 2 min
+    if (!strcmp(source, "internet")) return;
+    int64_t diff = (int64_t)epoch - (int64_t)time(nullptr);
+    if (diff >= -120 && diff <= 120) return;
+    Serial.printf("Hora corregida con la del servidor (%+lld s)\n", (long long)diff);
+  }
   struct timeval tv = { (time_t)epoch, 0 };
   settimeofday(&tv, nullptr);
   source = "server";

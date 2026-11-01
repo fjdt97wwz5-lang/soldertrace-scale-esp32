@@ -7,7 +7,7 @@ void clockBegin(const char* tz);     // zona horaria POSIX
 void clockSetTz(const char* tz);
 void clockLoop();
 bool clockValid();
-void clockFromServer(uint32_t epoch); // solo si aun no hay hora
+void clockFromServer(uint32_t epoch); // si no hay hora, o si la que hay no es de internet y difiere > 2 min
 const char* clockSource();            // "internet", "ds3231", "server", "none"
 bool clockHasDs3231();
 void clockHHMM(char* out, size_t n);

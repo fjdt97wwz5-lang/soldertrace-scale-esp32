@@ -51,4 +51,4 @@ void appOnResult(const char* requestId, const char* status, const char* message)
 void appOnConfigApplied();
 void appCancelJob(const char* reason);   // desde el boton CANCELAR
 void appEnterSetup();                    // red de configuracion WiFi
-void appRestart();
+void appRestart();                       // marca la version como buena y reinicia

@@ -75,13 +75,19 @@ void appOnCancel(const char* requestId) {
 }
 
 void appOnResult(const char* requestId, const char* status, const char* message) {
-  // el resultado puede llegar con el envase todavia encima (lo normal) o despues
+  // el resultado puede llegar con el envase todavia encima (lo normal) o despues. Solo se muestra el
+  // del ultimo pesaje de esta pantalla: nunca encima de un pesaje nuevo ni de envases ya retirados
+  // (p. ej. los resultados de una cola sin conexion que se manda al volver la red).
+  if (job.active || !result.show || strcmp(result.requestId, requestId) ||
+      (result.kind != RK_SENDING && result.kind != RK_OFFLINE)) {
+    Serial.print("Resultado ignorado (no es el pesaje en pantalla): "); Serial.println(requestId);
+    return;
+  }
   ResultKind k = RK_ERROR;
   if (!strcmp(status, "ok")) k = RK_OK;
   else if (!strcmp(status, "on_hold") || !strcmp(status, "out_of_range")) k = RK_HOLD;
   else if (!strcmp(status, "rejected")) k = RK_OUT;
-  float g = !strcmp(result.requestId, requestId) ? result.grams : NAN;
-  showResult(k, g, requestId, message);
+  showResult(k, result.grams, requestId, message);
 }
 
 void appCancelJob(const char* reason) {
@@ -93,7 +99,11 @@ void appCancelJob(const char* reason) {
 
 void appOnConfigApplied() { uiForceRedraw(); }
 void appEnterSetup() { wifiStartSetup(); }
-void appRestart() { delay(200); ESP.restart(); }
+void appRestart() {
+  otaMarkValid();   // reinicio pedido por el operario: la version funciona (si no, volveria a la anterior)
+  delay(200);
+  ESP.restart();
+}
 
 static void jobLoop() {
   if (!job.active) return;
@@ -149,6 +159,7 @@ static Screen pickScreen() {
   if (infoOpen) return S_INFO;
   if (result.show) return S_RESULT;
   if (job.active) return phase == JP_ZERO ? S_JOB_ZERO : (phase == JP_PLACE ? S_JOB_PLACE : S_JOB_HOLD);
+  if (otaFailed && millis() - otaFailedAt < 8000) return S_OTA;   // "fallo la actualizacion" unos segundos
   if (!clockValid() && millis() < WAIT_TIME_MS) return S_WAIT_TIME;
   if (!linkReady()) return (linkConnected() && pairCode[0]) ? S_PAIR : S_CONNECTING;
   if (!cfg.enabled) return S_DISABLED;
@@ -170,7 +181,7 @@ void setup() {
   storeBegin();
   langIdx = langIndexOf(cfg.lang);
   cfgStableMs = cfg.stableMs; cfgStableBand = cfg.stableBand; cfgZeroTol = cfg.zeroTol;
-  otaMarkValid();
+  // la version se da por buena al conectar con el portal (link.cpp) o tras 10 min con WiFi (loop)
   uiBootStep("Scale RS-232");
   scaleBegin();
   uiBootStep("Clock");
@@ -185,6 +196,7 @@ void setup() {
 void loop() {
   scaleLoop();
   wifiLoop();
+  if (millis() > MARK_VALID_AFTER_MS && WiFi.status() == WL_CONNECTED) otaMarkValid();
   if (!setupMode) {
     linkLoop();
     clockLoop();

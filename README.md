@@ -36,9 +36,16 @@ esptool --chip esp32s3 --baud 921600 write_flash 0x0 soldertrace_scale.ino.bootl
 
 **Con Arduino IDE** (compilando el código): placa *ESP32S3 Dev Module*, Flash Size **16MB**, PSRAM **OPI PSRAM**, USB CDC On Boot **Enabled**, Partition Scheme **Custom** (usa el `partitions.csv` de la carpeta). Librerías: *GFX Library for Arduino* 1.6.4, *WebSockets* (Markus Sattler) 2.7.3, *ArduinoJson* 7.4.2. Core esp32 3.3.2.
 
+Ajuste de compilación: `WEBSOCKETS_TCP_TIMEOUT=2000` (cada intento de conexión con el portal bloquea como mucho unos 2 s en vez de 5). `compilar.sh` ya lo pone. En Arduino IDE no se puede poner por proyecto: crea el archivo `platform.local.txt` junto al `platform.txt` del core (`Arduino15/packages/esp32/hardware/esp32/3.3.2/`) con la línea
+```
+compiler.cpp.extra_flags=-DWEBSOCKETS_TCP_TIMEOUT=2000
+```
+y reinicia el IDE. Sin él también funciona, pero con 5 s por intento. Al arrancar, el monitor serie muestra el valor que lleva (`espera TCP … ms`).
+
 ## Puesta en marcha en el cliente
 
-1. **WiFi.** Sin WiFi guardada, la báscula crea su propia red **SolderTrace-XXXX** y muestra en pantalla la contraseña. Desde el móvil te conectas a esa red, se abre la página de configuración (o entra a http://192.168.4.1), eliges la WiFi del cliente, su contraseña y el idioma. La báscula se reinicia y se conecta. Para cambiar la WiFi más tarde: mantén pulsada la cabecera de la pantalla 3 segundos → menú → *WiFi setup*.
+1. **WiFi.** Sin WiFi guardada, la báscula crea su propia red **SolderTrace-XXXX** y muestra en pantalla la contraseña (10 letras y números, nueva cada vez, sin 0/O/1/I para no confundirlos). Desde el móvil te conectas a esa red, se abre la página de configuración (o entra a http://192.168.4.1), eliges la WiFi del cliente, su contraseña y el idioma (*Search again* vuelve a buscar redes). La báscula se reinicia y se conecta. Para cambiar la WiFi más tarde: mantén pulsada la cabecera de la pantalla 3 segundos → menú → *WI-FI*. Si ya hay una WiFi guardada, la pantalla de configuración tiene el botón **EXIT SETUP** para salir sin cambiar nada (y sale sola a los 15 min). Si la WiFi guardada no conecta en 2 minutos, la pantalla *Connecting* lo dice y explica cómo entrar a la configuración.
+   En *Advanced* se puede cambiar el servidor: solo se acepta `wss://` (cifrado). Al cambiarlo, la báscula borra su alta y hay que darla de alta otra vez en el portal nuevo.
 2. **Hora.** Al arrancar espera hasta 1:30 a tener la hora (por internet o del DS3231 si lo lleva). Sin hora no pesa, para que todo registro lleve fecha y hora correctas.
 3. **Alta en el portal.** La pantalla muestra un **código de 6 dígitos**. El administrador del cliente entra en el portal → *Scales* → *Add scale*, escribe el código, elige la planta y el nombre. El portal le da su número (**B1**, **B2**…), que queda siempre visible en la pantalla.
 4. **Activar / desactivar.** Desde el portal. Desactivada, la pantalla lo dice y tiene el botón para **pedir activación**, que le llega al administrador para aprobar o rechazar.
@@ -56,7 +63,7 @@ La tolerancia (±1 g por defecto), el tiempo de estabilidad y los demás ajustes
 
 ## Actualizar por WiFi (OTA)
 
-En el portal → *Scales* → *Update firmware*. La báscula descarga la versión por https, comprueba que es un firmware de SolderTrace y su MD5, y solo se reinicia si todo está bien. Si la versión nueva no arranca, vuelve sola a la anterior. Nunca se actualiza a mitad de un pesaje.
+En el portal → *Scales* → *Update firmware*. La báscula descarga la versión por https, comprueba que es un firmware de SolderTrace y su MD5, y solo se reinicia si todo está bien. La versión nueva se da por buena cuando conecta con el portal (o tras 10 minutos funcionando con WiFi, o si el operario la reinicia desde el menú); si antes de eso se cuelga o se reinicia, la placa vuelve sola a la versión anterior. Nunca se actualiza a mitad de un pesaje.
 
 ## Compilar
 
@@ -67,4 +74,4 @@ Deja los archivos en `binarios/<versión>/` con su `md5.txt`.
 
 ## Seguridad
 
-No hay ninguna contraseña ni WiFi escrita en el código. La WiFi del cliente y la llave de la báscula se guardan solo en la memoria de la placa. La conexión con el portal va cifrada (wss / https) con los certificados raíz que trae la placa, y el portal guarda solo una huella de la llave.
+No hay ninguna contraseña ni WiFi escrita en el código. La WiFi del cliente y la llave de la báscula se guardan solo en la memoria de la placa. La conexión con el portal va siempre cifrada (solo `wss://`; las actualizaciones solo por `https://`) con los certificados raíz que trae la placa, y el portal guarda solo una huella de la llave. Si se cambia el servidor, la llave se borra y no se le manda al servidor nuevo.

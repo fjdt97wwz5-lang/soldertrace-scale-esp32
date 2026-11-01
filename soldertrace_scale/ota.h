@@ -7,4 +7,5 @@
 void otaRequest(const char* url, const char* version, const char* md5, uint32_t size);
 bool otaPending();
 void otaLoop(bool idle);   // idle = no hay pesaje en curso
-void otaMarkValid();       // en el arranque: la version nueva funciona
+void otaMarkValid();       // la version nueva funciona (al conectar con el portal o tras 10 min con WiFi)
+extern unsigned long otaFailedAt;  // millis del ultimo fallo (para mostrarlo unos segundos)
