@@ -46,7 +46,7 @@ y reinicia el IDE. Sin él también funciona, pero con 5 s por intento. Al arran
 
 1. **WiFi.** Sin WiFi guardada, la báscula crea su propia red **SolderTrace-XXXX** y muestra en pantalla la contraseña (10 letras y números, nueva cada vez, sin 0/O/1/I para no confundirlos). Desde el móvil te conectas a esa red, se abre la página de configuración (o entra a http://192.168.4.1), eliges la WiFi del cliente, su contraseña y el idioma (*Search again* vuelve a buscar redes). La báscula se reinicia y se conecta. Para cambiar la WiFi más tarde: mantén pulsada la cabecera de la pantalla 3 segundos → menú → *WI-FI*. Si ya hay una WiFi guardada, la pantalla de configuración tiene el botón **EXIT SETUP** para salir sin cambiar nada (y sale sola a los 15 min). Si la WiFi guardada no conecta en 2 minutos, la pantalla *Connecting* lo dice y explica cómo entrar a la configuración.
    En *Advanced* se puede cambiar el servidor: solo se acepta `wss://` (cifrado). Al cambiarlo, la báscula borra su alta y hay que darla de alta otra vez en el portal nuevo.
-2. **Hora.** Al arrancar espera hasta 1:30 a tener la hora (por internet o del DS3231 si lo lleva). Sin hora no pesa, para que todo registro lleve fecha y hora correctas.
+2. **Hora.** Al arrancar espera hasta 1:30 a tener la hora (por internet o del DS3231 si lo lleva). Si pasado ese tiempo sigue sin hora, pesa igual: el portal pone la hora de llegada a esos pesos y los marca como hora aproximada.
 3. **Alta en el portal.** La pantalla muestra un **código de 6 dígitos**. El administrador del cliente entra en el portal → *Scales* → *Add scale*, escribe el código, elige la planta y el nombre. El portal le da su número (**B1**, **B2**…), que queda siempre visible en la pantalla.
 4. **Activar / desactivar.** Desde el portal. Desactivada, la pantalla lo dice y tiene el botón para **pedir activación**, que le llega al administrador para aprobar o rechazar.
 
@@ -55,7 +55,7 @@ y reinicia el IDE. Sin él también funciona, pero con 5 s por intento. Al arran
 1. El operario escanea el QR del tarro en el portal y elige la báscula.
 2. La pantalla muestra el producto, el lote y el tarro: primero pide la balanza vacía (en cero) y luego **Place jar**.
 3. Cuando el peso está estable 2 segundos, lo captura y lo manda. Hay botón **Cancel**.
-4. El resultado sale en pantalla: **verde** dentro de tolerancia, **rojo** fuera (el tarro queda retenido hasta que un supervisor lo apruebe o lo rechace a cuarentena en el portal), **ámbar** si se guardó sin conexión.
+4. El resultado sale en pantalla: **verde** dentro de tolerancia; **ámbar** fuera de tolerancia (el tarro queda retenido hasta que un supervisor lo apruebe o lo rechace a cuarentena en el portal); **rojo** si el portal lo rechaza; **azul** si se guardó sin conexión y se mandará solo.
 
 Sin WiFi o sin servidor, los pesos se guardan en la placa (hasta 400) y se mandan solos cuando vuelve la conexión; el portal confirma cada uno y no los duplica.
 
