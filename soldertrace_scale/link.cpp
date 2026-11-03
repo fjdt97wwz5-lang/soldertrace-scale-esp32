@@ -8,13 +8,33 @@
 #include "lang.h"
 #include <WiFi.h>
 #include <WebSocketsClient.h>
+#include <NetworkClientSecure.h>
 #include <ArduinoJson.h>
 
 // Certificados raiz que ya trae el core del ESP32 (los mismos que un navegador)
 extern const uint8_t caBundleStart[] asm("_binary_x509_crt_bundle_start");
 extern const uint8_t caBundleEnd[] asm("_binary_x509_crt_bundle_end");
 
-static WebSocketsClient ws;
+// Igual que WebSocketsClient, pero deja ver en que paso va cada intento (para la pantalla "Esperando al servidor")
+class StWsClient : public WebSocketsClient {
+ public:
+  bool idle() { return _client.status == WSC_NOT_CONNECTED; }
+  unsigned long lastFail() { return _lastConnectionFail; }
+};
+static StWsClient ws;
+
+// Diagnostico de la conexion: cuantos intentos y por que fallo el ultimo
+static int attempts = 0;
+static LinkDiag diag = LD_NONE;
+static int diagCode = 0;
+static char diagText[48] = "";
+static unsigned long lastProbe = 0;
+static bool probeDue = false;
+static const unsigned long PROBE_EVERY_MS = 180000UL;   // la prueba de DNS/TLS bloquea unos segundos: como mucho cada 3 min
+static void setDiag(LinkDiag d, int code, const char* text) {
+  diag = d; diagCode = code;
+  strlcpy(diagText, text ? text : "", sizeof(diagText));
+}
 static bool started = false, open_ = false, authed = false, wifiWasUp = false, firstTry = true;
 static unsigned long lastStatus = 0, lastFlush = 0, lastAckMs = 0, downSince = 0, retryMs = 0;
 static char host[96], path[96];
@@ -239,11 +259,21 @@ static void onEvent(WStype_t type, uint8_t* payload, size_t length) {
     case WStype_CONNECTED:
       open_ = true; authed = false;
       sentUpTo = 0;
+      setDiag(LD_OPEN, 0, nullptr); attempts = 0;
       Serial.println("SolderTrace: conectado");
       sendHello();
       break;
     case WStype_DISCONNECTED:
-      if (open_) { Serial.println("SolderTrace: desconectado (reintentando)"); downSince = millis(); }
+      if (open_) { Serial.println("SolderTrace: desconectado (reintentando)"); downSince = millis(); setDiag(LD_LOST, 0, nullptr); }
+      else if (payload && length) {
+        // fallo antes de abrir: la conexion segura si se abrio, el servidor no contesto bien al WebSocket
+        char why[48] = "";
+        if (payload && length) { size_t n = length < sizeof(why) - 1 ? length : sizeof(why) - 1; memcpy(why, payload, n); why[n] = 0; }
+        if (strstr(why, "timeout")) setDiag(LD_NO_REPLY, WEBSOCKETS_TCP_TIMEOUT / 1000, nullptr);
+        else if (!strncmp(why, "HTTP ", 5)) setDiag(LD_HTTP, atoi(why + 5), nullptr);
+        else { const char* h = strstr(why, "HTTP "); setDiag(h ? LD_HTTP : LD_OTHER, h ? atoi(h + 5) : 0, why); }
+        Serial.printf("SolderTrace: intento %d sin abrir (%s)\n", attempts, why[0] ? why : "?");
+      }
       open_ = false; authed = false;
       break;
     case WStype_TEXT:
@@ -251,6 +281,34 @@ static void onEvent(WStype_t type, uint8_t* payload, size_t length) {
       break;
     default: break;
   }
+}
+
+// Por que no se abre la conexion: DNS, TCP o TLS (con el mismo juego de certificados que el WebSocket)
+static void probe() {
+  IPAddress ip;
+  if (!WiFi.hostByName(host, ip)) {
+    setDiag(LD_DNS, 0, host);
+    Serial.printf("SolderTrace: DNS no encuentra %s\n", host);
+    return;
+  }
+  NetworkClientSecure c;
+  c.setCACertBundle(caBundleStart, caBundleEnd - caBundleStart);
+  if (!c.connect(host, port, 8000)) {
+    char e[64] = "";
+    int code = c.lastError(e, sizeof(e));
+    c.stop();
+    if (code) { setDiag(LD_TLS, code, e); Serial.printf("SolderTrace: TLS con %s falla: %d %s\n", host, code, e); }
+    else { setDiag(LD_TCP, 0, ip.toString().c_str()); Serial.printf("SolderTrace: sin conexion TCP con %s (%s)\n", host, ip.toString().c_str()); }
+    return;
+  }
+  c.stop();
+  setDiag(LD_CONN_FAIL, 0, nullptr);   // la prueba si conecto: fallo puntual, se reintenta
+  Serial.println("SolderTrace: la prueba DNS/TCP/TLS conecta bien; se reintenta el WebSocket");
+}
+
+// La prueba bloquea unos segundos: solo sin pesaje, resultado, OTA ni menus abiertos
+static bool appIdleForProbe() {
+  return !job.active && !result.show && otaProgress < 0 && !menuOpen && !infoOpen && !pinOpen && !setupMode;
 }
 
 void linkBegin() {
@@ -300,7 +358,22 @@ void linkLoop() {
   }
   if (!wifiWasUp) { wifiWasUp = true; downSince = millis(); }
   if (!open_) setRetry();
+  bool wasIdle = !open_ && ws.idle();
+  unsigned long failBefore = ws.lastFail();
   ws.loop();
+  if (wasIdle && !open_) {
+    if (!ws.idle()) {                              // TCP + TLS bien: pedido el WebSocket, se espera la respuesta
+      attempts++; setDiag(LD_WAIT_REPLY, 0, nullptr);
+    } else if (ws.lastFail() != failBefore) {      // no se pudo abrir la conexion (DNS, TCP o TLS)
+      attempts++; setDiag(LD_CONN_FAIL, 0, nullptr);
+      Serial.printf("SolderTrace: intento %d, no se abre la conexion con %s\n", attempts, host);
+      probeDue = true;
+    }
+  }
+  if (probeDue && !open_ && appIdleForProbe() && (lastProbe == 0 || millis() - lastProbe > PROBE_EVERY_MS)) {
+    probeDue = false; lastProbe = millis();
+    probe();
+  }
   if (millis() > 1000) firstTry = false;
   if (!open_) return;
   if (millis() - lastStatus > STATUS_EVERY_MS) { lastStatus = millis(); sendStatus(); }
@@ -314,6 +387,11 @@ void linkLoop() {
 }
 
 bool linkConnected() { return open_; }
+int linkAttempts() { return attempts; }
+LinkDiag linkDiag() { return diag; }
+int linkDiagCode() { return diagCode; }
+const char* linkDiagText() { return diagText; }
+const char* linkHost() { return host; }
 bool linkReady() { return open_ && authed; }
 
 void linkSendLive(const char* requestId, float grams, bool stable, bool zero) {

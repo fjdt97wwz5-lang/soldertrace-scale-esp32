@@ -204,16 +204,50 @@ static void drawStatic(int s) {
       txtC(tr(T_WAIT_TIME), 70, 2, FG, BG);
       txtC(tr(T_WAIT_TIME_HINT), 100, 1, DIM, BG);
       break;
-    case S_CONNECTING:
+    case S_CONNECTING: {
+      // Lista de comprobacion: que ya va bien y a que se espera (Wi-Fi, hora, servidor)
       header("SolderTrace", GRAY);
-      txtC(tr(T_CONNECTING), 80, 2, FG, BG);
-      snprintf(line, sizeof(line), "Wi-Fi: %s", cfg.wifiSsid);
-      txtC(line, 120, 1, DIM, BG);
-      if (wifiHint()) {
-        txtC(tr(T_WIFI_FAIL), 150, 2, AMBER, BG);
-        txtC(tr(T_WIFI_FAIL_HINT), 176, 1, FG, BG);
+      bool wifiUp = WiFi.status() == WL_CONNECTED;
+      txtC(tr(wifiUp ? T_WAIT_SERVER : T_CONNECTING), 46, 2, FG, BG);
+      snprintf(line, sizeof(line), "Wi-Fi: %s (%s)", tr(wifiUp ? T_CONNECTED : T_ST_SEARCHING), cfg.wifiSsid);
+      txtFit(line, 12, 80, 2, 296, wifiUp ? GREEN : AMBER, BG);
+      if (!wifiUp) {
+        if (wifiHint()) {
+          txtC(tr(T_WIFI_FAIL), 150, 2, AMBER, BG);
+          txtC(tr(T_WIFI_FAIL_HINT), 176, 1, FG, BG);
+        }
+      } else {
+        char hm[8] = "--:--";
+        if (clockValid()) clockHHMM(hm, sizeof(hm));
+        snprintf(line, sizeof(line), "%s: %s", tr(T_ST_TIME), clockValid() ? hm : "...");
+        txtFit(line, 12, 106, 2, 296, clockValid() ? GREEN : AMBER, BG);
+        int n = linkAttempts();
+        LinkDiag d = linkDiag();
+        if (linkConnected()) snprintf(line, sizeof(line), "%s: %s", tr(T_SERVER), tr(T_ST_NO_WELCOME));
+        else if (n > 0) snprintf(line, sizeof(line), "%s: %s %d", tr(T_SERVER), tr(T_ST_TRY), n);
+        else snprintf(line, sizeof(line), "%s: %s", tr(T_SERVER), tr(T_ST_CONNECTING));
+        txtFit(line, 12, 132, 2, 296, AMBER, BG);
+        // motivo del ultimo intento y un detalle (codigo, nombre, error TLS)
+        char why[64] = "", det[64] = "";
+        switch (d) {
+          case LD_WAIT_REPLY: strlcpy(why, tr(T_R_WAIT_REPLY), sizeof(why)); break;
+          case LD_NO_REPLY:   snprintf(why, sizeof(why), tr(T_R_NO_REPLY), linkDiagCode()); break;
+          case LD_HTTP:       snprintf(why, sizeof(why), tr(T_R_HTTP), linkDiagCode()); break;
+          case LD_DNS:        strlcpy(why, tr(T_R_DNS), sizeof(why)); strlcpy(det, linkDiagText(), sizeof(det)); break;
+          case LD_TCP:        strlcpy(why, tr(T_R_TCP), sizeof(why)); snprintf(det, sizeof(det), "%s  %s", linkHost(), linkDiagText()); break;
+          case LD_TLS:        strlcpy(why, tr(T_R_TLS), sizeof(why)); snprintf(det, sizeof(det), "%d %s", linkDiagCode(), linkDiagText()); break;
+          case LD_CONN_FAIL:  strlcpy(why, tr(T_R_CONN_FAIL), sizeof(why)); strlcpy(det, linkHost(), sizeof(det)); break;
+          case LD_OTHER:      snprintf(why, sizeof(why), "%s: %s", tr(T_ERROR), linkDiagText()); break;
+          case LD_LOST:       strlcpy(why, tr(T_R_LOST), sizeof(why)); break;
+          default: break;
+        }
+        if (why[0]) txtFit(why, 12, 160, 2, 296, FG, BG);
+        if (det[0]) txtFit(det, 12, 184, 1, 296, DIM, BG);
       }
+      snprintf(line, sizeof(line), "MAC %s  %s", macStr, FW_VERSION);
+      txtC(line, 226, 1, DIM, BG);
       break;
+    }
     case S_PAIR:
       header("SolderTrace", BLUE);
       txtC(tr(T_PAIR_TITLE), 48, 2, DIM, BG);
@@ -336,7 +370,14 @@ static uint32_t staticHash(int s) {
   for (const char* p = job.requestId; *p; p++) h = h * 31 + *p;
   for (const char* p = cfg.name; *p; p++) h = h * 31 + *p;
   h ^= (uint32_t)result.kind * 131u ^ (result.show ? 0x55u : 0) ^ (otaFailed ? 0x99u : 0) ^ (linkReady() ? 0x1000u : 0);
-  if (s == S_CONNECTING && wifiHint()) h ^= 0x2000u;
+  if (s == S_CONNECTING) {
+    // se redibuja cuando cambia el estado de la WiFi, la hora (minuto) o el intento con el servidor
+    if (wifiHint()) h ^= 0x2000u;
+    if (WiFi.status() == WL_CONNECTED) h ^= 0x400000u;
+    if (clockValid()) { char hm[8]; clockHHMM(hm, sizeof(hm)); for (const char* p = hm; *p; p++) h = h * 31 + *p; }
+    h = h * 31 + (uint32_t)linkAttempts();
+    h = h * 31 + (uint32_t)linkDiag() * 7u + (uint32_t)linkDiagCode() + (linkConnected() ? 0x800000u : 0);
+  }
   if (cfg.demo) h ^= 0x4000u;
   if (s == S_PIN) { h ^= (uint32_t)strlen(pinBuf) * 0x10000u ^ (uint32_t)pinMsg * 0x100000u ^ (pinLockedFor() ? 0x200000u : 0); }
   if (s == S_SETUP_AP) { for (const char* p = apPassword; *p; p++) h = h * 31 + *p; if (wifiSetupAuto()) h ^= 0x8000u; }

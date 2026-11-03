@@ -30,6 +30,26 @@ void linkBegin();
 void linkLoop();
 bool linkConnected();     // socket abierto
 bool linkReady();         // socket abierto y bascula autenticada (dada de alta)
+
+// Estado de la conexion con el servidor, para la pantalla "Esperando al servidor"
+enum LinkDiag {
+  LD_NONE,        // aun no hubo intento
+  LD_WAIT_REPLY,  // conexion segura abierta, esperando que el servidor acepte el WebSocket
+  LD_NO_REPLY,    // el servidor no contesto a tiempo (code = segundos de espera)
+  LD_HTTP,        // el servidor contesto con un error HTTP (code)
+  LD_DNS,         // no se encuentra el nombre del servidor (text = nombre)
+  LD_TCP,         // no se llega al servidor (text = IP)
+  LD_TLS,         // falla la conexion segura (code = error mbedtls, text = descripcion)
+  LD_CONN_FAIL,   // no se pudo abrir la conexion (sin saber aun por que)
+  LD_OTHER,       // otro motivo (text)
+  LD_OPEN,        // socket abierto
+  LD_LOST         // estaba conectada y se corto
+};
+int linkAttempts();
+LinkDiag linkDiag();
+int linkDiagCode();
+const char* linkDiagText();
+const char* linkHost();
 void linkSendLive(const char* requestId, float grams, bool stable, bool zero);
 void linkSendCancelled(const char* requestId, const char* reason);
 void linkSendActivationRequest();

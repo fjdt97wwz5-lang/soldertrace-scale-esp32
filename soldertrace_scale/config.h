@@ -10,7 +10,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define FW_VERSION "st-2026.11.03a"
+#define FW_VERSION "st-2026.11.03b"
 // Marca que lleva todo firmware de esta bascula: la actualizacion OTA rechaza archivos sin ella.
 #define FW_MARK_PREFIX "SOLDERTRACE-SCALE-FW:"
 #define FW_MARK FW_MARK_PREFIX FW_VERSION

@@ -36,9 +36,9 @@ esptool --chip esp32s3 --baud 921600 write_flash 0x0 soldertrace_scale.ino.bootl
 
 **Con Arduino IDE** (compilando el código): placa *ESP32S3 Dev Module*, Flash Size **16MB**, PSRAM **OPI PSRAM**, USB CDC On Boot **Enabled**, Partition Scheme **Custom** (usa el `partitions.csv` de la carpeta). Librerías: *GFX Library for Arduino* 1.6.4, *WebSockets* (Markus Sattler) 2.7.3, *ArduinoJson* 7.4.2. Core esp32 3.3.2.
 
-Ajuste de compilación: `WEBSOCKETS_TCP_TIMEOUT=2000` (cada intento de conexión con el portal bloquea como mucho unos 2 s en vez de 5). `compilar.sh` ya lo pone. En Arduino IDE no se puede poner por proyecto: crea el archivo `platform.local.txt` junto al `platform.txt` del core (`Arduino15/packages/esp32/hardware/esp32/3.3.2/`) con la línea
+Ajuste de compilación: `WEBSOCKETS_TCP_TIMEOUT=10000` (la báscula espera hasta 10 s a que el servidor acepte la conexión; con 2 s, en st-2026.11.01a y 11.03a, se cortaba antes de que contestara y se quedaba en "Conectando"). `compilar.sh` ya lo pone. En Arduino IDE no se puede poner por proyecto: crea el archivo `platform.local.txt` junto al `platform.txt` del core (`Arduino15/packages/esp32/hardware/esp32/3.3.2/`) con la línea
 ```
-compiler.cpp.extra_flags=-DWEBSOCKETS_TCP_TIMEOUT=2000
+compiler.cpp.extra_flags=-DWEBSOCKETS_TCP_TIMEOUT=10000
 ```
 y reinicia el IDE. Sin él también funciona, pero con 5 s por intento. Al arrancar, el monitor serie muestra el valor que lleva (`espera TCP … ms`).
 

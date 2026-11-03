@@ -16,6 +16,8 @@ enum Txt {
   T_EXIT_SETUP, T_WIFI_FAIL, T_WIFI_FAIL_HINT,
   T_SETTLING, T_TARE_HINT, T_PIN_TITLE, T_PIN_WRONG, T_PIN_LOCKED, T_DEL, T_WIFI_QR, T_AP_CLOSES, T_WIFI_NOT_FOUND,
   T_DEMO, T_DEMO_HINT, T_DEMO_PUT, T_DEMO_OUT, T_DEMO_REMOVE,
+  T_WAIT_SERVER, T_ST_SEARCHING, T_ST_TIME, T_ST_TRY, T_ST_CONNECTING, T_ST_NO_WELCOME,
+  T_R_WAIT_REPLY, T_R_NO_REPLY, T_R_HTTP, T_R_DNS, T_R_TCP, T_R_TLS, T_R_CONN_FAIL, T_R_LOST,
   T_COUNT
 };
 
@@ -91,6 +93,21 @@ static const char* const TXT[T_COUNT][4] = {
   {"PUT JAR", "PONER ENVASE", "POSER POT", "COLOCAR POTE"},
   {"OUT OF RANGE", "FUERA RANGO", "HORS PLAGE", "FORA DA FAIXA"},
   {"REMOVE JAR", "QUITAR ENVASE", "RETIRER POT", "RETIRAR POTE"},
+  // pantalla "Esperando al servidor" (con %d: se rellena con un numero)
+  {"Waiting for the server", "Esperando al servidor", "Attente du serveur", "Aguardando o servidor"},
+  {"searching", "buscando", "recherche", "procurando"},
+  {"Time", "Hora", "Heure", "Hora"},
+  {"try", "intento", "essai", "tentativa"},
+  {"connecting", "conectando", "connexion", "conectando"},
+  {"connected, waiting reply", "conectado, esperando respuesta", "connecté, attente réponse", "conectado, aguardando resposta"},
+  {"Secure link OK, waiting reply", "Conexión segura OK, esperando", "Lien sécurisé OK, attente", "Conexão segura OK, aguardando"},
+  {"No reply in %d s", "Sin respuesta en %d s", "Pas de réponse en %d s", "Sem resposta em %d s"},
+  {"Server refused (HTTP %d)", "El servidor rechazó (HTTP %d)", "Refusé par le serveur (HTTP %d)", "Servidor recusou (HTTP %d)"},
+  {"Server name not found (DNS)", "No encuentra el servidor (DNS)", "Serveur introuvable (DNS)", "Servidor não encontrado (DNS)"},
+  {"Cannot reach the server", "No llega al servidor", "Serveur injoignable", "Servidor inacessível"},
+  {"Secure connection failed", "Falla la conexión segura", "Échec connexion sécurisée", "Falha na conexão segura"},
+  {"Could not open the connection", "No se pudo abrir la conexión", "Connexion impossible", "Não foi possível conectar"},
+  {"Connection lost, retrying", "Se cortó la conexión, reintentando", "Connexion perdue, nouvel essai", "Conexão perdida, tentando de novo"},
 };
 
 extern int langIdx;   // 0..3
