@@ -230,7 +230,10 @@ static void handleMessage(const char* txt, size_t len) {
     asU32(m["expires_s"], ex);
     appOnWeigh(d["request_id"] | "", d["qr"] | "", d["product"] | "", d["lot"] | "", d["mode"] | "check",
                m["expected_g"].is<float>() ? (float)d["expected_g"] : NAN,
-               m["tol_g"].is<float>() ? (float)d["tol_g"] : NAN, ex);
+               m["tol_g"].is<float>() ? (float)d["tol_g"] : NAN, ex,
+               m["demo_g"].is<float>() ? (float)d["demo_g"] : NAN, d["demo_auto"] | false);
+  } else if (!strcmp(type, "demo_refused")) {
+    appOnDemoRefused(d["code"] | "error", d["message"] | "");
   } else if (!strcmp(type, "cancel")) {
     appOnCancel(d["request_id"] | "");
   } else if (!strcmp(type, "result")) {
@@ -416,6 +419,13 @@ void linkSendCancelled(const char* requestId, const char* reason) {
 void linkSendActivationRequest() {
   JsonDocument d;
   d["type"] = "activation_request";
+  sendJson(d);
+}
+
+void linkSendDemoWeigh() {
+  JsonDocument d;
+  d["type"] = "demo_weigh";
+  d["demo"] = true;
   sendJson(d);
 }
 

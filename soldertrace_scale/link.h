@@ -53,6 +53,7 @@ const char* linkHost();
 void linkSendLive(const char* requestId, float grams, bool stable, bool zero);
 void linkSendCancelled(const char* requestId, const char* reason);
 void linkSendActivationRequest();
+void linkSendDemoWeigh();              // v0.8.0: boton PESANDO DEMO
 void linkSendOtaStatus(const char* phase, int progress, const char* err);
 void linkFlushQueue();    // manda los pesajes pendientes
 void linkRestart();       // tras cambiar el servidor

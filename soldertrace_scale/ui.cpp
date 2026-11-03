@@ -295,7 +295,9 @@ static void drawStatic(int s) {
       header(cfg.name[0] ? cfg.name : "SolderTrace", GREEN);
       txtC(tr(T_READY), 56, 4, GREEN, BG);
       txtC(tr(T_READY_HINT), 100, 1, FG, BG);
-      if (cfg.demo) txtC(tr(T_DEMO_HINT), 206, 1, AMBER, BG);
+      // demo: PESANDO DEMO pide al servidor el siguiente envase ficticio y la bascula lo pesa sola
+      if (cfg.demo) button(BTN_FULL, appDemoAsking() ? tr(T_DEMO_ASKING) : tr(T_DEMO_WEIGH), appDemoAsking() ? GRAY : AMBER,
+                           !appDemoAsking() && linkReady());
       if (cfg.number > 0) { snprintf(line, sizeof(line), "> B%d", cfg.number); txtC(line, 116, 2, TEAL, BG); }
       break;
     case S_JOB_ZERO:
@@ -306,7 +308,8 @@ static void drawStatic(int s) {
       drawJobInfo();
       txtC(s == S_JOB_ZERO ? tr(T_EMPTY_SCALE) : s == S_JOB_SETTLE ? tr(T_SETTLING)
            : s == S_JOB_PLACE ? tr(T_PLACE_JAR) : tr(T_HOLD_STILL), 98, 3, s == S_JOB_ZERO ? AMBER : FG, BG);
-      if (cfg.demo) {        // demo: botones que emulan poner y quitar el envase
+      if (cfg.demo && job.demoAuto) txtC(tr(T_DEMO_AUTO), 172, 2, AMBER, BG);   // PESANDO DEMO: sin botones
+      else if (cfg.demo) {   // demo: botones que emulan poner y quitar el envase
         if (s == S_JOB_PLACE) { button(BTN_D1, tr(T_DEMO_PUT), GREEN, true); button(BTN_D2, tr(T_DEMO_OUT), AMBER, true); }
         else if (s == S_JOB_ZERO || s == S_JOB_HOLD) button(BTN_DW, tr(T_DEMO_REMOVE), GRAY, true);
       } else if (s == S_JOB_ZERO) txtC(tr(T_TARE_HINT), 182, 1, AMBER, BG);   // la tara se hace en la balanza
@@ -395,6 +398,8 @@ static uint32_t staticHash(int s) {
     h = h * 31 + (uint32_t)linkDiag() * 7u + (uint32_t)linkDiagCode() + (linkConnected() ? 0x800000u : 0);
   }
   if (cfg.demo) h ^= 0x4000u;
+  if (cfg.demo && appDemoAsking()) h ^= 0x1000000u;
+  if (job.demoAuto) h ^= 0x2000000u;
   if (s == S_PIN) { h ^= (uint32_t)strlen(pinBuf) * 0x10000u ^ (uint32_t)pinMsg * 0x100000u ^ (pinLockedFor() ? 0x200000u : 0); }
   if (s == S_SETUP_AP) { for (const char* p = apPassword; *p; p++) h = h * 31 + *p; if (wifiSetupAuto()) h ^= 0x8000u; }
   if (s == S_RESULT) h ^= (uint32_t)(result.grams * 100);
@@ -412,9 +417,16 @@ static void drawDynamic(int s) {
     weightText(scaleOnline() ? scale.grams : NAN, wt, sizeof(wt));
     txtC(wt, 150, 3, scaleOnline() ? DIM : GRAY, BG);
     int q = queueCount();
-    char b[40];
-    if (q > 0) snprintf(b, sizeof(b), "  %d %s  ", q, tr(T_PENDING)); else strlcpy(b, "                    ", sizeof(b));
-    txtC(b, 186, 1, AMBER, BG);
+    char b[72];
+    const char* note = (s == S_READY && cfg.demo) ? appDemoNote() : nullptr;
+    if (note) snprintf(b, sizeof(b), "  %s  ", note);   // PESANDO DEMO rechazado o sin respuesta
+    else if (q > 0) snprintf(b, sizeof(b), "  %d %s  ", q, tr(T_PENDING));
+    else b[0] = 0;
+    static int lastNoteW = 0;   // borra el texto anterior solo si era mas largo (sin parpadeo)
+    int nw = b[0] ? textWidth(b, 1) : 0;
+    if (lastNoteW > nw) gfx->fillRect(0, 184, W, 12, BG);
+    lastNoteW = nw;
+    if (b[0]) txtC(b, 186, 1, AMBER, BG);
   }
   if (jobScreen(s)) {
     weightText(scaleOnline() ? scale.grams : NAN, wt, sizeof(wt));
@@ -486,7 +498,8 @@ static void onTap(int x, int y) {
     }
     return;
   }
-  if (cfg.demo && jobScreen(s)) {
+  if (s == S_READY && cfg.demo && inBtn(BTN_FULL, x, y)) { appDemoWeigh(); uiForceRedraw(); return; }
+  if (cfg.demo && jobScreen(s) && !job.demoAuto) {
     if (s == S_JOB_PLACE && inBtn(BTN_D1, x, y)) { appDemoPut(false); return; }
     if (s == S_JOB_PLACE && inBtn(BTN_D2, x, y)) { appDemoPut(true); return; }
     if ((s == S_JOB_ZERO || s == S_JOB_HOLD) && inBtn(BTN_DW, x, y)) { appDemoRemove(); return; }

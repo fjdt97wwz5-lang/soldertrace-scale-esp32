@@ -18,6 +18,7 @@ enum Txt {
   T_DEMO, T_DEMO_HINT, T_DEMO_PUT, T_DEMO_OUT, T_DEMO_REMOVE,
   T_WAIT_SERVER, T_ST_SEARCHING, T_ST_TIME, T_ST_TRY, T_ST_CONNECTING, T_ST_NO_WELCOME,
   T_R_WAIT_REPLY, T_R_NO_REPLY, T_R_HTTP, T_R_DNS, T_R_TCP, T_R_TLS, T_R_CONN_FAIL, T_R_LOST,
+  T_DEMO_WEIGH, T_DEMO_ASKING, T_DEMO_AUTO,
   T_COUNT
 };
 
@@ -108,6 +109,9 @@ static const char* const TXT[T_COUNT][4] = {
   {"Secure connection failed", "Falla la conexión segura", "Échec connexion sécurisée", "Falha na conexão segura"},
   {"Could not open the connection", "No se pudo abrir la conexión", "Connexion impossible", "Não foi possível conectar"},
   {"Connection lost, retrying", "Se cortó la conexión, reintentando", "Connexion perdue, nouvel essai", "Conexão perdida, tentando de novo"},
+  {"WEIGHING DEMO", "PESANDO DEMO", "PESÉE DÉMO", "PESANDO DEMO"},
+  {"Asking SolderTrace...", "Pidiendo a SolderTrace...", "Demande à SolderTrace...", "Pedindo ao SolderTrace..."},
+  {"Demo: the scale weighs by itself", "Demo: la báscula pesa sola", "Démo : la balance pèse seule", "Demo: a balança pesa sozinha"},
 };
 
 extern int langIdx;   // 0..3

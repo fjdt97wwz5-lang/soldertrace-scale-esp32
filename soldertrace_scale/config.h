@@ -10,7 +10,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define FW_VERSION "st-2026.11.03c"
+#define FW_VERSION "st-2026.11.03d"
 // Marca que lleva todo firmware de esta bascula: la actualizacion OTA rechaza archivos sin ella.
 #define FW_MARK_PREFIX "SOLDERTRACE-SCALE-FW:"
 #define FW_MARK FW_MARK_PREFIX FW_VERSION
@@ -66,6 +66,11 @@
 
 // Demo: la bascula se emula (sin balanza real) y los pesajes van al portal marcados como demo
 #define DEMO_READ_MS    100UL          // una lectura emulada cada 100 ms
+// v0.8.0 PESANDO DEMO
+#define DEMO_ASK_MS          10000UL   // sin pesaje del servidor en 10 s: se puede volver a pulsar
+#define DEMO_NOTE_MS          8000UL   // un aviso (rechazado, sin respuesta) se ve 8 s
+#define DEMO_PLACE_DELAY_MS    800UL   // "Pon el envase" se ve un momento antes de que suba el peso
+#define DEMO_SHOW_RESULT_MS   4000UL   // el resultado se ve 4 s y el envase emulado se quita solo
 
 // ---------- Tiempos ----------
 #define WAIT_TIME_MS        90000UL    // al encender espera hasta 1:30 por WiFi y hora

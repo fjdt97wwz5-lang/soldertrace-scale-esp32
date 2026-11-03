@@ -1,0 +1,5 @@
+e6327541e2dc394ca2c3b3280ac0f39f  boot_app0.bin
+bcba5a9359438ca7505dd047cbe36e7e  soldertrace_scale.ino.bootloader.bin
+ed52a0ee48bd692d02c05f55e9d3b317  soldertrace_scale.ino.partitions.bin
+bd95445e234fa96c927956074dab2828  soldertrace_scale_st-2026.11.03d.bin
+3fc279da0df25b964d5773f6e8715c7a  soldertrace_scale_st-2026.11.03d_completo.bin

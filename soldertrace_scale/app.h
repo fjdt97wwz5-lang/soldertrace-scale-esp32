@@ -18,6 +18,11 @@ struct Job {
   float expected = NAN;      // peso esperado (g), NAN = sin dato
   float tol = NAN;           // tolerancia (g)
   unsigned long deadline = 0;
+  // v0.8.0 "Pesando demo": el servidor dice el peso y la bascula emulada lo pone sola
+  bool demoAuto = false;
+  float demoG = NAN;
+  bool demoPut = false;
+  unsigned long demoPlaceAt = 0;
 };
 
 enum ResultKind { RK_OK, RK_OUT, RK_HOLD, RK_CANCELLED, RK_TIMEOUT, RK_OFFLINE, RK_SENDING, RK_ERROR };
@@ -45,7 +50,8 @@ extern char chipId[16], macStr[18];
 
 // Llamadas del enlace con el servidor
 void appOnWeigh(const char* requestId, const char* qr, const char* product, const char* lot,
-                const char* mode, float expected, float tol, uint32_t expiresS);
+                const char* mode, float expected, float tol, uint32_t expiresS,
+                float demoG = NAN, bool demoAuto = false);
 void appOnCancel(const char* requestId);
 void appOnResult(const char* requestId, const char* status, const char* message);
 void appOnConfigApplied();
@@ -56,3 +62,7 @@ void appOpenSettings();                  // cabecera pulsada 3 s: PIN (si hay) y
 void appDemoPut(bool outOfRange);        // demo: pone un envase con el peso esperado (o fuera de rango)
 void appDemoRemove();                    // demo: quita el envase
 void appOnDemoChanged();                 // el portal encendio/apago la demo
+void appDemoWeigh();                     // demo: boton PESANDO DEMO (pide al servidor el siguiente envase demo)
+bool appDemoAsking();                    // PESANDO DEMO pulsado, esperando el pesaje del servidor
+void appOnDemoRefused(const char* code, const char* message);
+const char* appDemoNote();               // aviso de PESANDO DEMO en la pantalla LISTO (nullptr = ninguno)

@@ -50,8 +50,40 @@ static void showResult(ResultKind k, float g, const char* reqId, const char* msg
   result.at = millis();
 }
 
+// ---------- PESANDO DEMO (v0.8.0) ----------
+static unsigned long demoAskAt = 0;      // boton pulsado (0 = no se espera nada)
+static char demoNote[64] = "";
+static unsigned long demoNoteAt = 0;
+static bool resultDemoAuto = false;      // el resultado en pantalla es de un pesaje demo automatico
+
+static void setDemoNote(const char* m) { strlcpy(demoNote, m ? m : "", sizeof(demoNote)); demoNoteAt = millis(); }
+bool appDemoAsking() { return demoAskAt && millis() - demoAskAt < DEMO_ASK_MS; }
+const char* appDemoNote() { return demoNote[0] && millis() - demoNoteAt < DEMO_NOTE_MS ? demoNote : nullptr; }
+
+void appDemoWeigh() {
+  if (!cfg.demo || job.active || result.show || appDemoAsking() || !linkReady()) return;
+  demoNote[0] = 0;
+  linkSendDemoWeigh();
+  demoAskAt = millis() ? millis() : 1;
+}
+
+void appOnDemoRefused(const char* code, const char* message) {
+  demoAskAt = 0;
+  setDemoNote(message && *message ? message : code);
+  Serial.print("PESANDO DEMO rechazado: "); Serial.println(code);
+}
+
+static void demoAskLoop() {
+  if (demoAskAt && millis() - demoAskAt >= DEMO_ASK_MS) {   // el servidor no contesto: se puede pulsar otra vez
+    demoAskAt = 0;
+    char b[64]; snprintf(b, sizeof(b), tr(T_R_NO_REPLY), (int)(DEMO_ASK_MS / 1000));
+    setDemoNote(b);
+  }
+}
+
 void appOnWeigh(const char* requestId, const char* qr, const char* product, const char* lot,
-                const char* mode, float expected, float tol, uint32_t expiresS) {
+                const char* mode, float expected, float tol, uint32_t expiresS, float demoG, bool demoAuto) {
+  demoAskAt = 0;
   if (!cfg.enabled) { linkSendCancelled(requestId, "disabled"); return; }
   if (otaProgress >= 0) { linkSendCancelled(requestId, "updating"); return; }
   if (job.active && strcmp(job.requestId, requestId)) { linkSendCancelled(requestId, "busy"); return; }
@@ -65,6 +97,10 @@ void appOnWeigh(const char* requestId, const char* qr, const char* product, cons
   job.expected = expected;
   job.tol = tol;
   job.deadline = millis() + constrain(expiresS, 20u, 900u) * 1000UL;
+  // pesaje demo automatico: solo con la bascula emulada (nunca con una balanza real)
+  job.demoAuto = demoAuto && cfg.demo && !isnan(demoG) && demoG > 0;
+  job.demoG = job.demoAuto ? max(demoG, cfg.minJar + 1.0f) : NAN;
+  if (job.demoAuto) demoNote[0] = 0;
   result.show = false;
   menuOpen = infoOpen = pinOpen = false;
   phase = scaleZeroHeld() ? JP_PLACE : (scaleAtZero() ? JP_SETTLE : JP_ZERO);
@@ -132,6 +168,7 @@ void appDemoRemove() { scaleDemoPut(0); }
 void appOnDemoChanged() {
   if (job.active) appCancelJob("mode_changed");   // nunca se mezcla un pesaje real con uno emulado
   result.show = false;
+  demoAskAt = 0; demoNote[0] = 0;
   scaleSetDemo(cfg.demo);
   uiForceRedraw();
 }
@@ -142,8 +179,20 @@ void appRestart() {
   ESP.restart();
 }
 
+// pesaje demo automatico: vacia la bascula emulada, espera el cero y pone el peso que mando el servidor
+// (sube poco a poco: "se mueve la bascula"); luego se captura estable como siempre
+static void demoAutoLoop() {
+  if (!job.demoAuto || !cfg.demo) return;
+  if (phase == JP_ZERO || phase == JP_SETTLE) { if (!job.demoPut) scaleDemoPut(0); return; }
+  if (phase == JP_PLACE && !job.demoPut) {
+    if (!job.demoPlaceAt) job.demoPlaceAt = millis() ? millis() : 1;
+    else if (millis() - job.demoPlaceAt >= DEMO_PLACE_DELAY_MS) { scaleDemoPut(roundf(job.demoG * 100.0f) / 100.0f); job.demoPut = true; }
+  }
+}
+
 static void jobLoop() {
   if (!job.active) return;
+  demoAutoLoop();
   if ((long)(millis() - job.deadline) > 0) {
     linkSendCancelled(job.requestId, "timeout");
     job.active = false;
@@ -175,6 +224,7 @@ static void jobLoop() {
         Serial.print("Peso estable "); Serial.print(stableG, 2); Serial.print(" g  seq "); Serial.println(seq);
         bool ready = linkReady();
         showResult(ready ? RK_SENDING : RK_OFFLINE, stableG, job.requestId, "");
+        resultDemoAuto = job.demoAuto;
         job.active = false;
         if (ready) linkFlushQueue();
         return;
@@ -189,8 +239,10 @@ static void jobLoop() {
 }
 
 static void resultLoop() {
-  if (!result.show) return;
+  if (!result.show) { resultDemoAuto = false; return; }
   unsigned long age = millis() - result.at;
+  // pesaje demo automatico: el envase emulado se quita solo tras ver el resultado unos segundos
+  if (resultDemoAuto && cfg.demo && result.kind != RK_SENDING && age > DEMO_SHOW_RESULT_MS) { scaleDemoPut(0); resultDemoAuto = false; }
   bool jarOff = !scaleOnline() || scale.grams < cfg.minJar;
   // el resultado se queda hasta quitar el envase (minimo 2 s) o 30 s; "enviando" espera la respuesta
   if (result.kind == RK_SENDING) { if (age > 20000 && jarOff) result.show = false; return; }
@@ -251,6 +303,7 @@ void loop() {
     clockLoop();
     jobLoop();
     resultLoop();
+    demoAskLoop();
     otaLoop(!job.active && !result.show);
   }
   screen = pickScreen();
