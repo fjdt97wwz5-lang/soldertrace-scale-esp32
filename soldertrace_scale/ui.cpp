@@ -70,6 +70,21 @@ static void txtFit(const char* utf8, int x, int y, uint8_t size, int maxW, uint1
   txt(b, x, y, size, fg, bg);
 }
 
+// texto en hasta dos lineas: corta en el ultimo espacio que cabe; lo que no quepa en la segunda se corta con "..."
+static void txtWrap2(const char* utf8, int x, int y, uint8_t size, int maxW, uint16_t fg, uint16_t bg) {
+  if (textWidth(utf8, size) <= maxW) { txt(utf8, x, y, size, fg, bg); return; }
+  char a[64]; strlcpy(a, utf8, sizeof(a));
+  int maxChars = maxW / (6 * size), n = 0, cut = -1;
+  for (int i = 0; a[i]; i++) {
+    if ((a[i] & 0xC0) != 0x80) { if (n == maxChars) break; n++; }
+    if (a[i] == ' ') cut = i;
+  }
+  if (cut <= 0) { txtFit(utf8, x, y, size, maxW, fg, bg); return; }
+  a[cut] = 0;
+  txt(a, x, y, size, fg, bg);
+  txtFit(a + cut + 1, x, y + 8 * size + 6, size, maxW, fg, bg);
+}
+
 static void wifiIcon(int cx, int cy, uint16_t c) {
   const float bands[4][2] = {{0, 2.3}, {4.6, 6.6}, {8.6, 10.6}, {12.6, 14.6}};
   for (int dy = -15; dy <= 0; dy++)
@@ -241,8 +256,9 @@ static void drawStatic(int s) {
           case LD_LOST:       strlcpy(why, tr(T_R_LOST), sizeof(why)); break;
           default: break;
         }
-        if (why[0]) txtFit(why, 12, 160, 2, 296, FG, BG);
-        if (det[0]) txtFit(det, 12, 184, 1, 296, DIM, BG);
+        // el motivo en dos lineas si no cabe en una (asi el codigo HTTP siempre se ve)
+        if (why[0]) txtWrap2(why, 12, 158, 2, 296, FG, BG);
+        if (det[0]) txtFit(det, 12, 206, 1, 296, DIM, BG);
       }
       snprintf(line, sizeof(line), "MAC %s  %s", macStr, FW_VERSION);
       txtC(line, 226, 1, DIM, BG);
