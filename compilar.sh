@@ -2,6 +2,7 @@
 # Compila el firmware de la bascula SolderTrace y deja los .bin en binarios/<version>/
 # Necesita arduino-cli con el core esp32 3.3.2 y las librerias: GFX Library for Arduino 1.6.4,
 # WebSockets (Markus Sattler) 2.7.3 y ArduinoJson 7.4.2.
+# CTAGS=<carpeta con ctags> si arduino-cli no tiene el suyo (el .ino no tiene funciones: vale un ctags vacio).
 set -e
 cd "$(dirname "$0")"
 export ARDUINO_DIRECTORIES_DATA=${ARDUINO_DIRECTORIES_DATA:-/tmp/acli/data} ARDUINO_DIRECTORIES_USER=${ARDUINO_DIRECTORIES_USER:-/tmp/acli/user}

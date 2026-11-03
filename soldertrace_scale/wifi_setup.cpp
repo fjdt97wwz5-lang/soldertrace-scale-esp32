@@ -5,6 +5,7 @@
 #include "lang.h"
 #include "ota.h"
 #include "link.h"
+#include "pin.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -12,8 +13,9 @@
 
 static WebServer* web = nullptr;
 static DNSServer* dns = nullptr;
-static bool inSetup = false;
-static unsigned long setupSince = 0;
+static bool inSetup = false, setupAuto = false;
+static unsigned long setupSince = 0, lastStaTry = 0;
+static bool needPin() { return setupAuto && pinRequired(); }   // red abierta sola: la pagina pide el PIN de Ajustes
 static unsigned long noWifiSince = 0, lastTry = 0;
 static int tries = 0;
 
@@ -53,7 +55,8 @@ static void pageForm() {
     "<p><small>" + scanNote + " <a href=/scan style='color:#9fd8b8'>Search again</a></small></p>"
     "<input name=ssid maxlength=32 placeholder='Network name' value=\"" + htmlEscape(cfg.wifiSsid) + "\">"
     "<label>Password</label><input name=pass type=password maxlength=64 placeholder='(unchanged if empty)'>"
-    "<label>Language / Idioma / Langue / Idioma</label><select name=lang>" + lsel + "</select>"
+    "<label>Language / Idioma / Langue / Idioma</label><select name=lang>" + lsel + "</select>" +
+    String(needPin() ? "<label>Settings PIN / PIN de ajustes</label><input name=pin type=password inputmode=numeric pattern='[0-9]{4}' maxlength=4 required>" : "") +
     "<details><summary><small>Advanced</small></summary><label>Server (wss://...)</label><input name=url maxlength=127 value=\"" +
     htmlEscape(cfg.serverUrl) + "\"></details>"
     "<button>Save and restart</button></form><p><small>MAC " + String(macStr) + " · " FW_VERSION "</small></p></body></html>";
@@ -70,6 +73,13 @@ static void pageScan() {
 static void pageSave() {
   String ssid = web->arg("ssid"), pass = web->arg("pass"), url = web->arg("url"), lang = web->arg("lang");
   ssid.trim(); url.trim();
+  if (needPin()) {
+    PinResult pr = pinCheck(web->arg("pin").c_str());
+    if (pr != PIN_OK) {
+      web->send(403, "text/plain", pr == PIN_LOCKED ? "Locked for 1 minute / Bloqueado 1 minuto" : "Wrong PIN / PIN incorrecto");
+      return;
+    }
+  }
   if (!ssid.length() || ssid.length() > 32) { web->send(400, "text/plain", "Wi-Fi name required"); return; }
   if (url.length() && (url.length() >= sizeof(cfg.serverUrl) || !linkUrlValid(url.c_str()))) {
     web->send(400, "text/plain", "Server must be wss://host[:port]/path");
@@ -94,8 +104,11 @@ static void pageSave() {
   ESP.restart();
 }
 
-void wifiStartSetup() {
+void wifiStartSetup(bool automatic) {
+  if (inSetup) return;
   inSetup = true;
+  setupAuto = automatic;
+  lastStaTry = millis();
   setupMode = true;
   setupSince = millis();
   WiFi.disconnect(true);
@@ -120,6 +133,38 @@ void wifiStartSetup() {
 }
 
 bool wifiInSetup() { return inSetup; }
+bool wifiSetupAuto() { return inSetup && setupAuto; }
+
+static void startSta() {
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.setAutoReconnect(true);
+  WiFi.begin(cfg.wifiSsid, cfg.wifiPass);
+}
+
+void wifiStopSetup() {
+  if (!inSetup) return;
+  if (web) { web->stop(); delete web; web = nullptr; }
+  if (dns) { dns->stop(); delete dns; dns = nullptr; }
+  WiFi.scanDelete();
+  bool up = WiFi.status() == WL_CONNECTED;   // ya volvio la WiFi guardada: se sigue con esa conexion
+  WiFi.softAPdisconnect(true);
+  inSetup = false;
+  setupAuto = false;
+  setupMode = false;
+  apPassword[0] = 0;
+  noWifiSince = 0;
+  tries = 0;
+  if (up) WiFi.mode(WIFI_STA);
+  else if (cfg.wifiSsid[0]) startSta();
+  Serial.println("Red de configuracion cerrada: vuelve a la WiFi guardada");
+}
+
+unsigned long wifiSetupLeft() {
+  if (!inSetup || !cfg.wifiSsid[0]) return 0;   // sin WiFi guardada se queda abierta
+  unsigned long lim = (unsigned long)cfg.apTimeoutMin * 60000UL, e = millis() - setupSince;
+  return e >= lim ? 1 : lim - e;
+}
 
 void wifiBegin() {
   WiFi.mode(WIFI_STA);
@@ -141,8 +186,23 @@ void wifiLoop() {
   if (inSetup) {
     dns->processNextRequest();
     web->handleClient();
-    // 15 min sin guardar y con WiFi guardada: vuelve solo a trabajar
-    if (cfg.wifiSsid[0] && millis() - setupSince > 15UL * 60UL * 1000UL) { otaMarkValid(); ESP.restart(); }
+    int phones = WiFi.softAPgetStationNum();
+    if (setupAuto && phones == 0) {
+      // abierta sola: mientras nadie esta conectado a ella sigue buscando la WiFi guardada cada 30 s,
+      // y si vuelve, la cierra (con un movil conectado no se busca: cambiar de canal lo desconectaria)
+      if (WiFi.status() == WL_CONNECTED) { wifiStopSetup(); return; }
+      if (millis() - lastStaTry > 30000UL) { lastStaTry = millis(); WiFi.begin(cfg.wifiSsid, cfg.wifiPass); }
+    }
+    // con WiFi guardada se cierra sola pasados cfg.apTimeoutMin minutos (no con un movil en el formulario)
+    if (cfg.wifiSsid[0] && phones == 0 && millis() - setupSince > (unsigned long)cfg.apTimeoutMin * 60000UL) wifiStopSetup();
+    return;
+  }
+  // la WiFi guardada no aparece en cfg.wifiWaitS: abre la red de configuracion (nunca a mitad de un pesaje)
+  if (cfg.wifiSsid[0] && WiFi.status() != WL_CONNECTED && noWifiSince &&
+      millis() - noWifiSince >= (unsigned long)cfg.wifiWaitS * 1000UL &&
+      !job.active && !result.show && otaProgress < 0 && !menuOpen && !infoOpen && !pinOpen) {
+    Serial.println("La WiFi guardada no aparece: se abre la red de configuracion");
+    wifiStartSetup(true);
     return;
   }
   if (WiFi.status() == WL_CONNECTED) { noWifiSince = 0; tries = 0; return; }

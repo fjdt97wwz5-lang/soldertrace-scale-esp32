@@ -4,7 +4,7 @@
 
 enum Screen {
   S_BOOT, S_SETUP_AP, S_WAIT_TIME, S_CONNECTING, S_PAIR, S_DISABLED, S_NO_SCALE, S_READY,
-  S_JOB_ZERO, S_JOB_PLACE, S_JOB_HOLD, S_RESULT, S_OTA, S_MENU, S_INFO
+  S_JOB_ZERO, S_JOB_SETTLE, S_JOB_PLACE, S_JOB_HOLD, S_RESULT, S_OTA, S_MENU, S_INFO, S_PIN
 };
 
 // Pesaje pedido por el portal: "pesa este envase en esta bascula"
@@ -33,7 +33,7 @@ struct Result {
 extern Job job;
 extern Result result;
 extern Screen screen;
-extern bool menuOpen, infoOpen;
+extern bool menuOpen, infoOpen, pinOpen;
 extern int activationState;     // 0 nada, 1 enviada, 2 rechazada
 extern char pairCode[8];
 extern char apPassword[12];
@@ -52,3 +52,7 @@ void appOnConfigApplied();
 void appCancelJob(const char* reason);   // desde el boton CANCELAR
 void appEnterSetup();                    // red de configuracion WiFi
 void appRestart();                       // marca la version como buena y reinicia
+void appOpenSettings();                  // cabecera pulsada 3 s: PIN (si hay) y luego Ajustes
+void appDemoPut(bool outOfRange);        // demo: pone un envase con el peso esperado (o fuera de rango)
+void appDemoRemove();                    // demo: quita el envase
+void appOnDemoChanged();                 // el portal encendio/apago la demo

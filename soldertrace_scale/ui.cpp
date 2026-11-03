@@ -7,6 +7,8 @@
 #include "clock.h"
 #include "link.h"
 #include "wifi_setup.h"
+#include "pin.h"
+#include "qrcodegen.h"
 #include <Arduino_GFX_Library.h>
 #include <Wire.h>
 #include <WiFi.h>
@@ -23,6 +25,13 @@ static const int W = 320, H = 240, HEAD = 34;
 struct Btn { int x, y, w, h; };
 static const Btn BTN_FULL = {8, 200, 304, 34};
 static const Btn BTN_M1 = {8, 50, 148, 60}, BTN_M2 = {164, 50, 148, 60}, BTN_M3 = {8, 120, 148, 60}, BTN_M4 = {164, 120, 148, 60};
+// demo: fila de botones encima de CANCELAR
+static const Btn BTN_D1 = {8, 162, 150, 34}, BTN_D2 = {162, 162, 150, 34}, BTN_DW = {8, 162, 304, 34};
+// teclado del PIN (3 x 4)
+static Btn keyBtn(int i) { return Btn{8 + (i % 3) * 104, 76 + (i / 3) * 40, 96, 36}; }
+static char pinBuf[5] = "";
+static int pinMsg = 0;   // 0 nada, 1 PIN incorrecto
+static unsigned long lastTouchMs = 0;
 
 static int drawnScreen = -1;
 static uint32_t drawnHash = 0;
@@ -93,7 +102,12 @@ static void headerDynamic(bool force) {
 static void header(const char* title, uint16_t color) {
   headColor = color;
   gfx->fillRect(0, 0, W, HEAD, color);
-  txtFit(title, 8, 9, 2, 130, FG, color);
+  if (cfg.demo) {   // modo demo: siempre visible en la cabecera
+    txtFit(title, 6, 13, 1, 72, FG, color);
+    int w = textWidth(tr(T_DEMO), 2) + 6;
+    gfx->fillRoundRect(80, 6, w, 22, 4, AMBER);
+    txt(tr(T_DEMO), 83, 10, 2, BG, AMBER);
+  } else txtFit(title, 8, 9, 2, 130, FG, color);
   if (cfg.number > 0) {
     char id[12]; snprintf(id, sizeof(id), "B%d", cfg.number);
     int w = strlen(id) * 12 + 6, x = 206 - w;
@@ -106,7 +120,7 @@ static void header(const char* title, uint16_t color) {
 static void button(const Btn& b, const char* label, uint16_t color, bool active) {
   uint16_t fill = active ? color : PANEL, ink = active ? FG : GRAY;
   gfx->fillRoundRect(b.x, b.y, b.w, b.h, 10, fill);
-  uint8_t s = textWidth(label, 3) <= b.w - 10 ? 3 : 2;
+  uint8_t s = textWidth(label, 3) <= b.w - 10 ? 3 : textWidth(label, 2) <= b.w - 6 ? 2 : 1;
   int tw = textWidth(label, s);
   txt(label, b.x + (b.w - tw) / 2, b.y + (b.h - 8 * s) / 2 + 1, s, ink, fill);
 }
@@ -125,6 +139,24 @@ static const char* modeText() {
   if (!strcmp(job.mode, "receive")) return tr(T_MODE_RECEIVE);
   return tr(T_MODE_CHECK);
 }
+
+// QR para unirse a la red de configuracion desde la camara del movil
+static void drawWifiQr(int x, int y, int maxPx) {
+  char t[96];
+  snprintf(t, sizeof(t), "WIFI:T:WPA;S:%s;P:%s;;", apSsid, apPassword);
+  static uint8_t qr[qrcodegen_BUFFER_LEN_FOR_VERSION(6)], tmp[qrcodegen_BUFFER_LEN_FOR_VERSION(6)];
+  if (!qrcodegen_encodeText(t, tmp, qr, qrcodegen_Ecc_LOW, 1, 6, qrcodegen_Mask_AUTO, true)) return;
+  int n = qrcodegen_getSize(qr), q = 2;                 // 2 modulos de margen blanco
+  int px = maxPx / (n + 2 * q);
+  if (px < 1) return;
+  int side = (n + 2 * q) * px;
+  gfx->fillRect(x, y, side, side, 0xFFFF);
+  for (int r = 0; r < n; r++)
+    for (int c = 0; c < n; c++)
+      if (qrcodegen_getModule(qr, c, r)) gfx->fillRect(x + (c + q) * px, y + (r + q) * px, px, px, 0x0000);
+}
+
+static bool jobScreen(int s) { return s == S_JOB_ZERO || s == S_JOB_SETTLE || s == S_JOB_PLACE || s == S_JOB_HOLD; }
 
 // ---------- pantallas ----------
 static void drawJobInfo() {
@@ -151,15 +183,19 @@ static void drawStatic(int s) {
       txtC(FW_VERSION, 220, 1, DIM, BG);
       break;
     case S_SETUP_AP:
+      // horizontal: datos a la izquierda, QR a la derecha (unirse con la camara del movil)
       header(tr(T_WIFI_SETUP), BLUE);
-      txtC(tr(T_WIFI_SETUP_HINT1), 50, 1, DIM, BG);
-      txtC(apSsid, 68, 2, FG, BG);
-      snprintf(line, sizeof(line), "%s %s", tr(T_WIFI_PASSWORD), apPassword);
-      txtC(line, 104, 2, AMBER, BG);
-      txtC(tr(T_WIFI_SETUP_HINT2), 140, 1, DIM, BG);
+      drawWifiQr(208, 40, 106);
+      txtFit(tr(T_WIFI_SETUP_HINT1), 8, 44, 1, 196, DIM, BG);
+      txtFit(apSsid, 8, 58, 2, 196, FG, BG);
+      txtFit(tr(T_WIFI_PASSWORD), 8, 84, 1, 196, DIM, BG);
+      txtFit(apPassword, 8, 96, 2, 196, AMBER, BG);
+      txtFit(tr(T_WIFI_QR), 8, 122, 1, 196, DIM, BG);
+      txtFit(tr(T_WIFI_SETUP_HINT2), 8, 136, 1, 196, DIM, BG);
       snprintf(line, sizeof(line), "MAC %s  %s", macStr, FW_VERSION);
       if (cfg.wifiSsid[0]) {             // ya hay WiFi guardada: se puede salir sin cambiar nada
-        txtC(line, 172, 1, DIM, BG);
+        txtFit(line, 8, 172, 1, 304, DIM, BG);
+        if (wifiSetupAuto()) txtFit(tr(T_WIFI_NOT_FOUND), 8, 186, 1, 304, AMBER, BG);
         button(BTN_FULL, tr(T_EXIT_SETUP), GRAY, true);
       } else txtC(line, 220, 1, DIM, BG);
       break;
@@ -209,15 +245,22 @@ static void drawStatic(int s) {
       header(cfg.name[0] ? cfg.name : "SolderTrace", GREEN);
       txtC(tr(T_READY), 56, 4, GREEN, BG);
       txtC(tr(T_READY_HINT), 100, 1, FG, BG);
+      if (cfg.demo) txtC(tr(T_DEMO_HINT), 206, 1, AMBER, BG);
       if (cfg.number > 0) { snprintf(line, sizeof(line), "> B%d", cfg.number); txtC(line, 116, 2, TEAL, BG); }
       break;
     case S_JOB_ZERO:
+    case S_JOB_SETTLE:
     case S_JOB_PLACE:
     case S_JOB_HOLD:
-      header(cfg.name[0] ? cfg.name : "SolderTrace", TEAL);
+      header(cfg.name[0] ? cfg.name : "SolderTrace", s == S_JOB_ZERO ? AMBER : TEAL);
       drawJobInfo();
-      txtC(s == S_JOB_ZERO ? tr(T_EMPTY_SCALE) : (s == S_JOB_PLACE ? tr(T_PLACE_JAR) : tr(T_HOLD_STILL)), 100, 3,
-           s == S_JOB_ZERO ? AMBER : FG, BG);
+      txtC(s == S_JOB_ZERO ? tr(T_EMPTY_SCALE) : s == S_JOB_SETTLE ? tr(T_SETTLING)
+           : s == S_JOB_PLACE ? tr(T_PLACE_JAR) : tr(T_HOLD_STILL), 98, 3, s == S_JOB_ZERO ? AMBER : FG, BG);
+      if (cfg.demo) {        // demo: botones que emulan poner y quitar el envase
+        if (s == S_JOB_PLACE) { button(BTN_D1, tr(T_DEMO_PUT), GREEN, true); button(BTN_D2, tr(T_DEMO_OUT), AMBER, true); }
+        else if (s == S_JOB_ZERO || s == S_JOB_HOLD) button(BTN_DW, tr(T_DEMO_REMOVE), GRAY, true);
+      } else if (s == S_JOB_ZERO) txtC(tr(T_TARE_HINT), 182, 1, AMBER, BG);   // la tara se hace en la balanza
+      if (s == S_JOB_SETTLE && !cfg.demo) gfx->drawRoundRect(40, 178, 240, 14, 4, DIM);
       button(BTN_FULL, tr(T_CANCEL), RED, true);
       break;
     case S_RESULT: {
@@ -234,7 +277,8 @@ static void drawStatic(int s) {
       if (!isnan(result.grams)) txtC(wt, HEAD + 50, 4, FG, c);
       if (result.kind == RK_HOLD) txtC(tr(T_RESULT_HOLD), HEAD + 98, 1, FG, c);
       else if (result.msg[0]) txtC(result.msg, HEAD + 98, 1, FG, c);
-      txtC(tr(T_REMOVE_JAR), 186, 2, DIM, BG);
+      if (cfg.demo) button(BTN_FULL, tr(T_DEMO_REMOVE), GRAY, true);
+      else txtC(tr(T_REMOVE_JAR), 186, 2, DIM, BG);
       break;
     }
     case S_OTA:
@@ -268,6 +312,21 @@ static void drawStatic(int s) {
       button(BTN_FULL, tr(T_BACK), GRAY, true);
       break;
     }
+    case S_PIN: {
+      header(tr(T_PIN_TITLE), GRAY);
+      for (int i = 0; i < 4; i++) {
+        gfx->drawRoundRect(8 + i * 28, 42, 24, 28, 4, FG);
+        if (i < (int)strlen(pinBuf)) gfx->fillCircle(20 + i * 28, 56, 5, FG);
+      }
+      bool lockedNow = pinLockedFor() > 0;
+      if (!lockedNow && pinMsg == 1) txtFit(tr(T_PIN_WRONG), 124, 48, 2, 188, RED, BG);
+      const char* keys[12] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", tr(T_DEL), "0", tr(T_BACK)};
+      for (int i = 0; i < 12; i++) {
+        bool act = !lockedNow || i == 11;
+        button(keyBtn(i), keys[i], i == 11 ? GRAY : i == 9 ? AMBER : BLUE, act);
+      }
+      break;
+    }
   }
 }
 
@@ -278,6 +337,9 @@ static uint32_t staticHash(int s) {
   for (const char* p = cfg.name; *p; p++) h = h * 31 + *p;
   h ^= (uint32_t)result.kind * 131u ^ (result.show ? 0x55u : 0) ^ (otaFailed ? 0x99u : 0) ^ (linkReady() ? 0x1000u : 0);
   if (s == S_CONNECTING && wifiHint()) h ^= 0x2000u;
+  if (cfg.demo) h ^= 0x4000u;
+  if (s == S_PIN) { h ^= (uint32_t)strlen(pinBuf) * 0x10000u ^ (uint32_t)pinMsg * 0x100000u ^ (pinLockedFor() ? 0x200000u : 0); }
+  if (s == S_SETUP_AP) { for (const char* p = apPassword; *p; p++) h = h * 31 + *p; if (wifiSetupAuto()) h ^= 0x8000u; }
   if (s == S_RESULT) h ^= (uint32_t)(result.grams * 100);
   return h;
 }
@@ -297,9 +359,28 @@ static void drawDynamic(int s) {
     if (q > 0) snprintf(b, sizeof(b), "  %d %s  ", q, tr(T_PENDING)); else strlcpy(b, "                    ", sizeof(b));
     txtC(b, 186, 1, AMBER, BG);
   }
-  if (s == S_JOB_ZERO || s == S_JOB_PLACE || s == S_JOB_HOLD) {
+  if (jobScreen(s)) {
     weightText(scaleOnline() ? scale.grams : NAN, wt, sizeof(wt));
-    txtC(wt, 136, 5, s == S_JOB_HOLD ? TEAL : FG, BG);
+    if (cfg.demo) txtC(wt, 128, 4, s == S_JOB_HOLD ? TEAL : s == S_JOB_ZERO ? AMBER : FG, BG);
+    else txtC(wt, 132, 5, s == S_JOB_HOLD ? TEAL : s == S_JOB_ZERO ? AMBER : FG, BG);
+    if (s == S_JOB_SETTLE && !cfg.demo) {   // barra del tiempo seguido en cero
+      unsigned long z = scaleZeroFor();
+      int w = (int)(236UL * min(z, cfgZeroHoldMs) / max(1UL, cfgZeroHoldMs));
+      gfx->fillRect(42, 180, w, 10, TEAL);
+      gfx->fillRect(42 + w, 180, 236 - w, 10, BG);
+    }
+  }
+  if (s == S_SETUP_AP) {
+    unsigned long left = wifiSetupLeft();
+    char b[40];
+    if (left) { unsigned long sec = left / 1000; snprintf(b, sizeof(b), "%s %lu:%02lu   ", tr(T_AP_CLOSES), sec / 60, sec % 60); }
+    else strlcpy(b, " ", sizeof(b));
+    txt(b, 8, 156, 1, DIM, BG);
+  }
+  if (s == S_PIN) {
+    unsigned long lk = pinLockedFor();
+    char b[40];
+    if (lk) { snprintf(b, sizeof(b), "%s %lu s ", tr(T_PIN_LOCKED), (lk + 999) / 1000); txtFit(b, 124, 52, 1, 188, AMBER, BG); }
   }
   if (s == S_OTA && otaProgress >= 0) {
     gfx->fillRoundRect(23, 113, max(4, 274 * otaProgress / 100), 24, 4, GREEN);
@@ -328,6 +409,31 @@ static bool readTouch(int& x, int& y) {
 
 static void onTap(int x, int y) {
   int s = screen;
+  if (s == S_PIN) {
+    for (int i = 0; i < 12; i++) {
+      if (!inBtn(keyBtn(i), x, y)) continue;
+      if (i == 11) { pinOpen = false; pinBuf[0] = 0; pinMsg = 0; return; }   // VOLVER
+      if (pinLockedFor()) return;
+      size_t n = strlen(pinBuf);
+      if (i == 9) { if (n) pinBuf[n - 1] = 0; pinMsg = 0; return; }        // BORRAR
+      if (n >= 4) return;
+      pinBuf[n] = i == 10 ? '0' : (char)('1' + i);
+      pinBuf[n + 1] = 0;
+      if (n + 1 == 4) {
+        PinResult r = pinCheck(pinBuf);
+        pinBuf[0] = 0;
+        if (r == PIN_OK) { pinOpen = false; pinMsg = 0; menuOpen = true; }
+        else pinMsg = r == PIN_WRONG ? 1 : 0;
+      }
+      return;
+    }
+    return;
+  }
+  if (cfg.demo && jobScreen(s)) {
+    if (s == S_JOB_PLACE && inBtn(BTN_D1, x, y)) { appDemoPut(false); return; }
+    if (s == S_JOB_PLACE && inBtn(BTN_D2, x, y)) { appDemoPut(true); return; }
+    if ((s == S_JOB_ZERO || s == S_JOB_HOLD) && inBtn(BTN_DW, x, y)) { appDemoRemove(); return; }
+  }
   if (s == S_MENU) {
     if (inBtn(BTN_M1, x, y)) { menuOpen = false; appEnterSetup(); }
     else if (inBtn(BTN_M2, x, y)) { menuOpen = false; infoOpen = true; }
@@ -336,14 +442,18 @@ static void onTap(int x, int y) {
     return;
   }
   if (s == S_INFO) { if (inBtn(BTN_FULL, x, y)) infoOpen = false; return; }
-  if (s == S_SETUP_AP) { if (cfg.wifiSsid[0] && inBtn(BTN_FULL, x, y)) appRestart(); return; }   // salir sin cambios
-  if ((s == S_JOB_ZERO || s == S_JOB_PLACE || s == S_JOB_HOLD) && inBtn(BTN_FULL, x, y)) { appCancelJob("operator"); return; }
+  if (s == S_SETUP_AP) { if (cfg.wifiSsid[0] && inBtn(BTN_FULL, x, y)) wifiStopSetup(); return; }   // salir sin cambios
+  if (jobScreen(s) && inBtn(BTN_FULL, x, y)) { appCancelJob("operator"); return; }
   if (s == S_DISABLED && inBtn(BTN_FULL, x, y) && activationState != 1 && linkReady()) {
     linkSendActivationRequest();
     activationState = 1;
     return;
   }
-  if (s == S_RESULT) { result.show = false; return; }   // tocar = cerrar el resultado
+  if (s == S_RESULT) {                                   // tocar = cerrar el resultado
+    if (cfg.demo) appDemoRemove();                       // demo: y quitar el envase emulado
+    result.show = false;
+    return;
+  }
 }
 
 static void touchLoop() {
@@ -353,14 +463,17 @@ static void touchLoop() {
   last = millis();
   int x, y;
   bool has = readTouch(x, y);
+  if (has) lastTouchMs = millis();
   if (has && !down) {
     pressStart = millis(); longDone = false;
     onTap(x, y);
   }
   // mantener 3 s el encabezado = menu de ajustes (fuera de un pesaje)
-  if (has && down && !longDone && y < HEAD && millis() - pressStart > 3000 && !job.active && screen != S_OTA) {
+  if (has && down && !longDone && y < HEAD && millis() - pressStart > 3000 && !job.active && screen != S_OTA &&
+      screen != S_SETUP_AP && screen != S_PIN) {
     longDone = true;
-    menuOpen = true; infoOpen = false;
+    pinBuf[0] = 0; pinMsg = 0;
+    appOpenSettings();   // con PIN puesto en el portal pide el PIN; si no, abre Ajustes
   }
   down = has;
 }
@@ -387,6 +500,9 @@ void uiForceRedraw() { forceAll = true; }
 
 void uiLoop() {
   touchLoop();
+  // PIN, Ajustes e Info se cierran solos tras 60 s sin tocar (si no, bloquean la red de configuracion)
+  if (!(menuOpen || infoOpen || pinOpen)) lastTouchMs = millis();
+  else if (millis() - lastTouchMs > 60000UL) { menuOpen = infoOpen = pinOpen = false; pinBuf[0] = 0; pinMsg = 0; }
   static unsigned long lastDyn = 0;
   int s = screen;
   uint32_t h = staticHash(s);

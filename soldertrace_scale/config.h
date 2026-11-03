@@ -10,7 +10,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define FW_VERSION "st-2026.11.01a"
+#define FW_VERSION "st-2026.11.03a"
 // Marca que lleva todo firmware de esta bascula: la actualizacion OTA rechaza archivos sin ella.
 #define FW_MARK_PREFIX "SOLDERTRACE-SCALE-FW:"
 #define FW_MARK FW_MARK_PREFIX FW_VERSION
@@ -44,8 +44,28 @@
 #define DEFAULT_LANG         "en"
 #define DEFAULT_STABLE_MS    2000      // peso quieto este tiempo = estable
 #define DEFAULT_STABLE_BAND  0.05f     // variacion maxima (g) dentro de la ventana
-#define DEFAULT_ZERO_TOL     0.20f     // |peso| <= esto = balanza en cero
+#define DEFAULT_ZERO_TOL     0.50f     // banda de cero: |peso| <= esto (igual que la dosificadora)
+#define DEFAULT_ZERO_HOLD_MS 1000      // ... seguido este tiempo = balanza en cero ("Estabilizando")
 #define DEFAULT_MIN_JAR_G    5.0f      // por debajo no hay envase encima
+
+// WiFi: si la WiFi guardada no aparece en este tiempo, la bascula abre su red de configuracion
+// (SolderTrace-XXXX, con QR en pantalla) y la cierra sola pasado DEFAULT_AP_TIMEOUT_MIN. El portal los cambia.
+#define DEFAULT_WIFI_WAIT_S     90
+#define DEFAULT_AP_TIMEOUT_MIN  10
+#define WIFI_WAIT_S_MIN 30
+#define WIFI_WAIT_S_MAX 600
+#define AP_TIMEOUT_MIN_MIN 1
+#define AP_TIMEOUT_MIN_MAX 60
+#define ZERO_HOLD_MS_MIN 200
+#define ZERO_HOLD_MS_MAX 10000
+
+// PIN de Ajustes (4 cifras, se pone en el portal; la placa solo guarda su huella sha256 con sal).
+// Sin PIN en el portal, Ajustes se abre sin pedirlo.
+#define PIN_MAX_TRIES   3
+#define PIN_LOCK_MS     60000UL        // 3 fallos = bloqueado 1 minuto
+
+// Demo: la bascula se emula (sin balanza real) y los pesajes van al portal marcados como demo
+#define DEMO_READ_MS    100UL          // una lectura emulada cada 100 ms
 
 // ---------- Tiempos ----------
 #define WAIT_TIME_MS        90000UL    // al encender espera hasta 1:30 por WiFi y hora

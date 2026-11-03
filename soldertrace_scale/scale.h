@@ -14,11 +14,17 @@ struct ScaleState {
 
 extern ScaleState scale;
 extern float cfgStableBand, cfgZeroTol;
-extern unsigned long cfgStableMs;
+extern unsigned long cfgStableMs, cfgZeroHoldMs;
 
 void scaleBegin();
 void scaleLoop();
 bool scaleOnline();
-bool scaleAtZero();          // |peso| <= tolerancia de cero
+bool scaleAtZero();          // |peso| <= banda de cero (en este instante)
+unsigned long scaleZeroFor(); // ms seguidos dentro de la banda de cero (0 = fuera)
+bool scaleZeroHeld();        // en cero seguido cfgZeroHoldMs (regla de la dosificadora)
+// Demo: balanza emulada. Las lecturas pasan por el mismo camino que las de la balanza real.
+void scaleSetDemo(bool on);
+bool scaleDemo();
+void scaleDemoPut(float grams);   // "pone" un envase de ese peso (0 = lo quita)
 bool scaleStable(float& g);  // peso quieto cfgStableMs dentro de cfgStableBand; devuelve la media
 void scaleResetStable();

@@ -10,6 +10,8 @@
 #include "link.h"
 #include "ota.h"
 #include "ui.h"
+#include "pin.h"
+#include <esp_random.h>
 #include <WiFi.h>
 #include <esp_mac.h>
 
@@ -17,7 +19,7 @@
 Job job;
 Result result;
 Screen screen = S_BOOT;
-bool menuOpen = false, infoOpen = false, setupMode = false;
+bool menuOpen = false, infoOpen = false, pinOpen = false, setupMode = false;
 int activationState = 0;
 char pairCode[8] = "";
 char apPassword[12] = "";
@@ -27,14 +29,17 @@ bool otaFailed = false;
 char chipId[16] = "", macStr[18] = "";
 int langIdx = 0;
 float cfgStableBand = DEFAULT_STABLE_BAND, cfgZeroTol = DEFAULT_ZERO_TOL;
-unsigned long cfgStableMs = DEFAULT_STABLE_MS;
+unsigned long cfgStableMs = DEFAULT_STABLE_MS, cfgZeroHoldMs = DEFAULT_ZERO_HOLD_MS;
 
 volatile const char* fwMark = FW_MARK;   // la marca tiene que ir dentro del .bin (la OTA la busca)
 
 // ---------- pesaje ----------
-enum JobPhase { JP_ZERO, JP_PLACE, JP_HOLD };
+// JP_ZERO "Vacia la balanza" (fuera de la banda de cero) -> JP_SETTLE "Estabilizando" (dentro de la banda,
+// cfgZeroHoldMs seguido; si se sale vuelve a JP_ZERO) -> JP_PLACE "Pon el envase" -> JP_HOLD "Quieto" -> resultado.
+// Igual que la dosificadora: el firmware nunca hace tara, la tara se hace con el boton de la balanza.
+enum JobPhase { JP_ZERO, JP_SETTLE, JP_PLACE, JP_HOLD };
 static JobPhase phase = JP_ZERO;
-static unsigned long lastLive = 0;
+static unsigned long lastLive = 0, settleOutSince = 0;
 
 static void showResult(ResultKind k, float g, const char* reqId, const char* msg) {
   result.show = true;
@@ -61,8 +66,8 @@ void appOnWeigh(const char* requestId, const char* qr, const char* product, cons
   job.tol = tol;
   job.deadline = millis() + constrain(expiresS, 20u, 900u) * 1000UL;
   result.show = false;
-  menuOpen = infoOpen = false;
-  phase = scaleAtZero() ? JP_PLACE : JP_ZERO;
+  menuOpen = infoOpen = pinOpen = false;
+  phase = scaleZeroHeld() ? JP_PLACE : (scaleAtZero() ? JP_SETTLE : JP_ZERO);
   scaleResetStable();
   Serial.print("Pesaje pedido: "); Serial.print(qr); Serial.print(" "); Serial.println(mode);
 }
@@ -98,6 +103,38 @@ void appCancelJob(const char* reason) {
 }
 
 void appOnConfigApplied() { uiForceRedraw(); }
+
+void appOpenSettings() {
+  menuOpen = infoOpen = false;
+  if (pinRequired()) pinOpen = true;   // el teclado abre el menu si el PIN es correcto
+  else menuOpen = true;
+}
+
+// ---------- demo: balanza emulada con botones en pantalla ----------
+static float rnd(float a, float b) { return a + (b - a) * (esp_random() % 10001) / 10000.0f; }
+
+void appDemoPut(bool outOfRange) {
+  if (!cfg.demo) return;
+  float tol = (!isnan(job.tol) && job.tol > 0) ? job.tol : 1.0f;
+  float g;
+  if (job.active && !isnan(job.expected) && job.expected > 0) {
+    // dentro: el esperado +- 40 % de la tolerancia; fuera: el esperado + 2 tolerancias + 0,5 g
+    g = outOfRange ? job.expected + 2.0f * tol + 0.5f : job.expected + rnd(-0.4f, 0.4f) * tol;
+  } else {
+    g = rnd(80.0f, 400.0f);            // sin peso esperado (primer pesaje): un envase cualquiera
+  }
+  g = max(g, cfg.minJar + 1.0f);
+  scaleDemoPut(roundf(g * 100.0f) / 100.0f);
+}
+
+void appDemoRemove() { scaleDemoPut(0); }
+
+void appOnDemoChanged() {
+  if (job.active) appCancelJob("mode_changed");   // nunca se mezcla un pesaje real con uno emulado
+  result.show = false;
+  scaleSetDemo(cfg.demo);
+  uiForceRedraw();
+}
 void appEnterSetup() { wifiStartSetup(); }
 void appRestart() {
   otaMarkValid();   // reinicio pedido por el operario: la version funciona (si no, volveria a la anterior)
@@ -117,7 +154,15 @@ static void jobLoop() {
   float g = online ? scale.grams : NAN;
   switch (phase) {
     case JP_ZERO:
-      if (scaleAtZero()) { phase = JP_PLACE; scaleResetStable(); }
+      if (scaleAtZero()) phase = JP_SETTLE;
+      break;
+    case JP_SETTLE:
+      // vuelve a "Vacia la balanza" si sigue fuera de la banda 300 ms (sin parpadeo en el borde de +-0,5 g);
+      // el tiempo seguido en cero se reinicia igual con cualquier lectura fuera
+      if (scaleAtZero()) settleOutSince = 0;
+      else if (!settleOutSince) settleOutSince = millis() ? millis() : 1;
+      else if (millis() - settleOutSince > 300) { phase = JP_ZERO; settleOutSince = 0; }
+      else if (scaleZeroHeld()) { phase = JP_PLACE; scaleResetStable(); }
       break;
     case JP_PLACE:
       if (online && g >= cfg.minJar) { phase = JP_HOLD; scaleResetStable(); }
@@ -126,7 +171,7 @@ static void jobLoop() {
       if (!online || g < cfg.minJar) { phase = JP_PLACE; break; }
       float stableG;
       if (scaleStable(stableG)) {
-        uint32_t seq = queueAdd(job.requestId, stableG, true);
+        uint32_t seq = queueAdd(job.requestId, stableG, true, cfg.demo);
         Serial.print("Peso estable "); Serial.print(stableG, 2); Serial.print(" g  seq "); Serial.println(seq);
         bool ready = linkReady();
         showResult(ready ? RK_SENDING : RK_OFFLINE, stableG, job.requestId, "");
@@ -139,7 +184,7 @@ static void jobLoop() {
   }
   if (millis() - lastLive >= LIVE_EVERY_MS && linkReady()) {
     lastLive = millis();
-    linkSendLive(job.requestId, g, phase == JP_HOLD, scaleAtZero());
+    linkSendLive(job.requestId, g, phase == JP_HOLD, scaleZeroHeld());
   }
 }
 
@@ -155,10 +200,12 @@ static void resultLoop() {
 static Screen pickScreen() {
   if (otaProgress >= 0) return S_OTA;
   if (setupMode) return S_SETUP_AP;
+  if (pinOpen) return S_PIN;
   if (menuOpen) return S_MENU;
   if (infoOpen) return S_INFO;
   if (result.show) return S_RESULT;
-  if (job.active) return phase == JP_ZERO ? S_JOB_ZERO : (phase == JP_PLACE ? S_JOB_PLACE : S_JOB_HOLD);
+  if (job.active) return phase == JP_ZERO ? S_JOB_ZERO : phase == JP_SETTLE ? S_JOB_SETTLE
+                       : phase == JP_PLACE ? S_JOB_PLACE : S_JOB_HOLD;
   if (otaFailed && millis() - otaFailedAt < 8000) return S_OTA;   // "fallo la actualizacion" unos segundos
   if (!clockValid() && millis() < WAIT_TIME_MS) return S_WAIT_TIME;
   if (!linkReady()) return (linkConnected() && pairCode[0]) ? S_PAIR : S_CONNECTING;
@@ -180,10 +227,11 @@ void setup() {
   uiBootStep("Memory");
   storeBegin();
   langIdx = langIndexOf(cfg.lang);
-  cfgStableMs = cfg.stableMs; cfgStableBand = cfg.stableBand; cfgZeroTol = cfg.zeroTol;
+  cfgStableMs = cfg.stableMs; cfgStableBand = cfg.stableBand; cfgZeroTol = cfg.zeroTol; cfgZeroHoldMs = cfg.zeroHoldMs;
   // la version se da por buena al conectar con el portal (link.cpp) o tras 10 min con WiFi (loop)
   uiBootStep("Scale RS-232");
   scaleBegin();
+  scaleSetDemo(cfg.demo);
   uiBootStep("Clock");
   clockBegin(cfg.tz);
   uiBootStep("Wi-Fi");
@@ -197,6 +245,7 @@ void loop() {
   scaleLoop();
   wifiLoop();
   if (millis() > MARK_VALID_AFTER_MS && WiFi.status() == WL_CONNECTED) otaMarkValid();
+  if (scaleDemo() != cfg.demo) appOnDemoChanged();   // tambien tras borrar el alta (unpair)
   if (!setupMode) {
     linkLoop();
     clockLoop();

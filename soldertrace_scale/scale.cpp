@@ -1,6 +1,11 @@
 #include "scale.h"
+#include <esp_random.h>
 
 ScaleState scale;
+static bool demoOn = false;
+static float demoTarget = 0, demoNow = 0;
+static unsigned long demoLast = 0;
+static unsigned long zeroSince = 0;   // millis desde que el peso esta dentro de la banda de cero (0 = fuera)
 static HardwareSerial ScaleSerial(1);
 static char lineBuf[64];
 static size_t lineLen = 0;
@@ -59,6 +64,12 @@ static void closeBucket() {
 
 static void pushReading(float g, bool unstable) {
   unsigned long now = millis();
+  // regla del cero de la dosificadora: dentro de la banda seguido (cualquier lectura fuera la reinicia)
+  static unsigned long lastPush = 0;
+  if (now - lastPush > SCALE_TIMEOUT_MS) zeroSince = 0;   // se corto la balanza: el cero empieza de nuevo
+  lastPush = now;
+  if (fabsf(g) <= cfgZeroTol) { if (!zeroSince) zeroSince = now ? now : 1; }
+  else zeroSince = 0;
   if (curOpen && now - cur.t >= BUCKET_MS) closeBucket();
   if (!curOpen) { cur.mn = cur.mx = g; cur.sum = 0; cur.n = 0; cur.unstable = false; cur.t = now; curOpen = true; }
   cur.mn = min(cur.mn, g); cur.mx = max(cur.mx, g);
@@ -66,7 +77,41 @@ static void pushReading(float g, bool unstable) {
   cur.unstable |= unstable;
 }
 
+// Lectura emulada: el peso va hacia el objetivo en ~0,6 s (como al poner el envase) con un ruido de +-0,01 g
+static void demoLoop() {
+  unsigned long now = millis();
+  if (now - demoLast < DEMO_READ_MS) return;
+  demoLast = now;
+  float d = demoTarget - demoNow;
+  demoNow = fabsf(d) < 0.02f ? demoTarget : demoNow + d * 0.35f;
+  // ruido de +-0,01 g solo si la banda de estabilidad lo deja (con banda < 0,03 g, sin ruido)
+  bool noise = fabsf(d) < 0.02f && cfgStableBand >= 0.03f;
+  float g = demoNow + (noise ? (float)((int)(esp_random() % 3) - 1) * 0.01f : 0.0f);
+  g = roundf(g * 100.0f) / 100.0f;
+  scale.grams = g;
+  scale.unstableFlag = fabsf(d) >= 0.02f;
+  scale.lastMs = now;
+  scale.has = true;
+  pushReading(g, scale.unstableFlag);
+}
+
+void scaleSetDemo(bool on) {
+  if (on == demoOn) return;
+  demoOn = on;
+  demoTarget = demoNow = 0;
+  scale.has = false;        // la balanza real (o la emulada) tiene que volver a dar lecturas
+  zeroSince = 0;
+  scaleResetStable();
+}
+bool scaleDemo() { return demoOn; }
+void scaleDemoPut(float grams) { demoTarget = grams; }
+
 void scaleLoop() {
+  if (demoOn) {
+    while (ScaleSerial.available()) ScaleSerial.read();   // en demo no se usa la balanza real
+    demoLoop();
+    return;
+  }
   while (ScaleSerial.available()) {
     char c = ScaleSerial.read();
     if (c == '\n' || c == '\r') {
@@ -94,6 +139,13 @@ void scaleLoop() {
 bool scaleOnline() { return scale.has && millis() - scale.lastMs < SCALE_TIMEOUT_MS; }
 
 bool scaleAtZero() { return scaleOnline() && fabsf(scale.grams) <= cfgZeroTol; }
+
+unsigned long scaleZeroFor() {
+  if (!scaleAtZero() || !zeroSince) return 0;
+  return millis() - zeroSince;
+}
+
+bool scaleZeroHeld() { return scaleZeroFor() >= cfgZeroHoldMs; }
 
 void scaleResetStable() { winCount = 0; winHead = 0; curOpen = false; }
 

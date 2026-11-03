@@ -81,6 +81,7 @@ static void sendHello() {
   d["next_seq"] = nextSeq;
   d["queue"] = queueCount();
   d["lang"] = cfg.lang;
+  if (cfg.demo) d["demo"] = true;
   sendJson(d);
 }
 
@@ -96,6 +97,7 @@ static void sendStatus() {
   d["ip"] = WiFi.localIP().toString();
   d["clock"] = clockSource();
   d["ds3231"] = clockHasDs3231();
+  if (cfg.demo) d["demo"] = true;
   sendJson(d);
 }
 
@@ -120,6 +122,7 @@ void linkFlushQueue() {
     if (isfinite(r.grams)) d["grams"] = serialized(String(r.grams, 2));
     d["stable"] = (bool)r.stable;
     d["ts"] = r.ts;
+    if (r.demo) d["demo"] = true;
     if (!sendJson(d)) break;
     sentUpTo = r.seq;
   }
@@ -132,7 +135,7 @@ static void ackTo(uint32_t upTo) {
 }
 
 static void applySettings(JsonObjectConst m) {
-  bool changed = false;
+  bool changed = false, demoChanged = false;
   uint32_t v;
   if (asU32(m["number"], v)) { cfg.number = (int)min(v, (uint32_t)9999); changed = true; }
   if (m["name"].is<const char*>()) { strlcpy(cfg.name, m["name"] | "", sizeof(cfg.name)); changed = true; }
@@ -153,12 +156,26 @@ static void applySettings(JsonObjectConst m) {
     if (s["stable_band_g"].is<float>()) cfg.stableBand = constrain((float)s["stable_band_g"], 0.01f, 5.0f);
     if (s["zero_tol_g"].is<float>()) cfg.zeroTol = constrain((float)s["zero_tol_g"], 0.01f, 5.0f);
     if (s["min_jar_g"].is<float>()) cfg.minJar = constrain((float)s["min_jar_g"], 0.5f, 1000.0f);
-    cfgStableMs = cfg.stableMs; cfgStableBand = cfg.stableBand; cfgZeroTol = cfg.zeroTol;
+    if (asU32(s["zero_hold_ms"], v)) cfg.zeroHoldMs = constrain(v, (uint32_t)ZERO_HOLD_MS_MIN, (uint32_t)ZERO_HOLD_MS_MAX);
+    if (asU32(s["wifi_wait_s"], v)) cfg.wifiWaitS = constrain(v, (uint32_t)WIFI_WAIT_S_MIN, (uint32_t)WIFI_WAIT_S_MAX);
+    if (asU32(s["ap_timeout_min"], v)) cfg.apTimeoutMin = constrain(v, (uint32_t)AP_TIMEOUT_MIN_MIN, (uint32_t)AP_TIMEOUT_MIN_MAX);
+    if (s["pin_hash"].is<const char*>()) {
+      const char* ph = s["pin_hash"] | "";
+      // "<sal>$<64 hex>" o "" (sin PIN). Cualquier otra cosa no se acepta: se queda el PIN que habia.
+      const char* d = strchr(ph, '$');
+      if (!*ph || (d && strlen(d + 1) == 64 && strlen(ph) < sizeof(cfg.pinHash))) strlcpy(cfg.pinHash, ph, sizeof(cfg.pinHash));
+    }
+    if (s["demo"].is<bool>()) {
+      bool dm = s["demo"];
+      if (dm != cfg.demo) { cfg.demo = dm; demoChanged = true; }   // app.cpp sigue a cfg.demo en el loop
+    }
+    cfgStableMs = cfg.stableMs; cfgStableBand = cfg.stableBand; cfgZeroTol = cfg.zeroTol; cfgZeroHoldMs = cfg.zeroHoldMs;
     changed = true;
   }
   if (asU32(m["server_time"], v)) clockFromServer(v);
   if (asU32(m["acked_upto"], v)) ackTo(v);
   if (changed) { storeSave(); appOnConfigApplied(); }
+  if (demoChanged && scaleDemo() != cfg.demo) appOnDemoChanged();
 }
 
 static void handleMessage(const char* txt, size_t len) {
@@ -306,6 +323,7 @@ void linkSendLive(const char* requestId, float grams, bool stable, bool zero) {
   if (!isnan(grams)) d["grams"] = serialized(String(grams, 2));
   d["stable"] = stable;
   d["zero"] = zero;
+  if (cfg.demo) d["demo"] = true;
   sendJson(d);
 }
 

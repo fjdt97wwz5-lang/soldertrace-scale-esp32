@@ -14,6 +14,8 @@ enum Txt {
   T_UPDATING, T_UPDATE_FAIL, T_MENU, T_MENU_WIFI, T_MENU_INFO, T_MENU_RESTART, T_BACK,
   T_SERVER, T_CONNECTED, T_NOT_CONNECTED, T_PENDING, T_LIVE, T_ERROR,
   T_EXIT_SETUP, T_WIFI_FAIL, T_WIFI_FAIL_HINT,
+  T_SETTLING, T_TARE_HINT, T_PIN_TITLE, T_PIN_WRONG, T_PIN_LOCKED, T_DEL, T_WIFI_QR, T_AP_CLOSES, T_WIFI_NOT_FOUND,
+  T_DEMO, T_DEMO_HINT, T_DEMO_PUT, T_DEMO_OUT, T_DEMO_REMOVE,
   T_COUNT
 };
 
@@ -21,7 +23,7 @@ enum Txt {
 static const char* const TXT[T_COUNT][4] = {
   {"Starting", "Iniciando", "Démarrage", "Iniciando"},
   {"Wi-Fi setup", "Configurar WiFi", "Config. Wi-Fi", "Configurar Wi-Fi"},
-  {"On your phone, join the network:", "En el móvil, conéctate a la red:", "Sur le téléphone, rejoignez :", "No celular, conecte-se à rede:"},
+  {"On your phone, join:", "En el móvil, conéctate a:", "Sur le téléphone :", "No celular, conecte-se a:"},
   {"then open http://192.168.4.1", "y abre http://192.168.4.1", "puis ouvrez http://192.168.4.1", "e abra http://192.168.4.1"},
   {"Password:", "Contraseña:", "Mot de passe :", "Senha:"},
   {"Waiting for Wi-Fi and time", "Esperando WiFi y hora", "Attente Wi-Fi et heure", "Aguardando Wi-Fi e hora"},
@@ -75,6 +77,20 @@ static const char* const TXT[T_COUNT][4] = {
   {"Can't connect to Wi-Fi", "No conecta a la WiFi", "Wi-Fi injoignable", "Sem conexão Wi-Fi"},
   {"Hold the top bar 3 s, then WI-FI", "Mantén pulsada la barra de arriba 3 s y elige WIFI",
    "Appuyez 3 s sur la barre du haut, puis WI-FI", "Segure a barra superior 3 s e toque em WI-FI"},
+  {"Stabilizing", "Estabilizando", "Stabilisation", "Estabilizando"},
+  {"Zero it with the scale's TARE key", "Haz tara con el botón de la balanza", "Faites la tare sur la balance", "Faça a tara no botão da balança"},
+  {"Settings PIN", "PIN de ajustes", "PIN des réglages", "PIN de ajustes"},
+  {"Wrong PIN", "PIN incorrecto", "PIN incorrect", "PIN incorreto"},
+  {"Locked, wait", "Bloqueado, espera", "Bloqué, patientez", "Bloqueado, aguarde"},
+  {"DEL", "BORRAR", "EFF.", "APAGAR"},
+  {"or scan the QR code", "o escanea el código QR", "ou scannez le QR code", "ou escaneie o QR code"},
+  {"Closes in", "Se cierra en", "Fermeture dans", "Fecha em"},
+  {"Saved Wi-Fi not found", "No encuentra la WiFi guardada", "Wi-Fi enregistré introuvable", "Wi-Fi salvo não encontrado"},
+  {"DEMO", "DEMO", "DÉMO", "DEMO"},
+  {"Demo mode: emulated scale", "Modo demo: báscula emulada", "Mode démo : balance simulée", "Modo demo: balança simulada"},
+  {"PUT JAR", "PONER ENVASE", "POSER POT", "COLOCAR POTE"},
+  {"OUT OF RANGE", "FUERA RANGO", "HORS PLAGE", "FORA DA FAIXA"},
+  {"REMOVE JAR", "QUITAR ENVASE", "RETIRER POT", "RETIRAR POTE"},
 };
 
 extern int langIdx;   // 0..3

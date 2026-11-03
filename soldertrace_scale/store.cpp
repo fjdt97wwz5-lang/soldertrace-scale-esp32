@@ -110,6 +110,11 @@ void storeBegin() {
   cfg.zeroTol = constrain(prefs.getFloat("zero", DEFAULT_ZERO_TOL), 0.01f, 5.0f);
   cfg.minJar = constrain(prefs.getFloat("minj", DEFAULT_MIN_JAR_G), 0.5f, 1000.0f);
   cfg.stableMs = constrain(prefs.getUInt("sms", DEFAULT_STABLE_MS), STABLE_MS_MIN, STABLE_MS_MAX);
+  cfg.zeroHoldMs = constrain(prefs.getUInt("zhold", DEFAULT_ZERO_HOLD_MS), (uint32_t)ZERO_HOLD_MS_MIN, (uint32_t)ZERO_HOLD_MS_MAX);
+  cfg.wifiWaitS = constrain(prefs.getUInt("wwait", DEFAULT_WIFI_WAIT_S), (uint32_t)WIFI_WAIT_S_MIN, (uint32_t)WIFI_WAIT_S_MAX);
+  cfg.apTimeoutMin = constrain(prefs.getUInt("apto", DEFAULT_AP_TIMEOUT_MIN), (uint32_t)AP_TIMEOUT_MIN_MIN, (uint32_t)AP_TIMEOUT_MIN_MAX);
+  loadStr("pinh", cfg.pinHash, sizeof(cfg.pinHash), "");
+  cfg.demo = prefs.getBool("demo", false);
   nextSeq = prefs.getUInt("seq", 1);
   // "confirmado hasta": el mayor de las 8 posiciones
   for (int i = 0; i < 8; i++) {
@@ -135,6 +140,11 @@ void storeSave() {
   prefs.putFloat("zero", cfg.zeroTol);
   prefs.putFloat("minj", cfg.minJar);
   prefs.putUInt("sms", cfg.stableMs);
+  prefs.putUInt("zhold", cfg.zeroHoldMs);
+  prefs.putUInt("wwait", cfg.wifiWaitS);
+  prefs.putUInt("apto", cfg.apTimeoutMin);
+  prefs.putString("pinh", cfg.pinHash);
+  prefs.putBool("demo", cfg.demo);
 }
 
 void storeClearPairing() {
@@ -142,10 +152,12 @@ void storeClearPairing() {
   cfg.number = 0;
   cfg.name[0] = 0;
   cfg.enabled = true;
+  cfg.pinHash[0] = 0;      // el PIN y la demo eran de ese cliente
+  cfg.demo = false;
   storeSave();
 }
 
-uint32_t queueAdd(const char* requestId, float grams, bool stable) {
+uint32_t queueAdd(const char* requestId, float grams, bool stable, bool demo) {
   QueuedReading r = {};
   r.seq = nextSeq++;
   prefs.putUInt("seq", nextSeq);   // un pesaje es poco frecuente: no gasta la memoria
@@ -153,6 +165,7 @@ uint32_t queueAdd(const char* requestId, float grams, bool stable) {
   r.ts = now > 1700000000 ? (uint32_t)now : 0;
   r.grams = grams;
   r.stable = stable;
+  r.demo = demo;
   strlcpy(r.requestId, requestId ? requestId : "", sizeof(r.requestId));
   if (fsOk) {
     if (pendN >= QUEUE_MAX) {

@@ -44,7 +44,9 @@ y reinicia el IDE. Sin él también funciona, pero con 5 s por intento. Al arran
 
 ## Puesta en marcha en el cliente
 
-1. **WiFi.** Sin WiFi guardada, la báscula crea su propia red **SolderTrace-XXXX** y muestra en pantalla la contraseña (10 letras y números, nueva cada vez, sin 0/O/1/I para no confundirlos). Desde el móvil te conectas a esa red, se abre la página de configuración (o entra a http://192.168.4.1), eliges la WiFi del cliente, su contraseña y el idioma (*Search again* vuelve a buscar redes). La báscula se reinicia y se conecta. Para cambiar la WiFi más tarde: mantén pulsada la cabecera de la pantalla 3 segundos → menú → *WI-FI*. Si ya hay una WiFi guardada, la pantalla de configuración tiene el botón **EXIT SETUP** para salir sin cambiar nada (y sale sola a los 15 min). Si la WiFi guardada no conecta en 2 minutos, la pantalla *Connecting* lo dice y explica cómo entrar a la configuración.
+1. **WiFi.** Sin WiFi guardada, la báscula crea su propia red **SolderTrace-XXXX** y muestra en pantalla la contraseña (10 letras y números, nueva cada vez, sin 0/O/1/I para no confundirlos). Desde el móvil te conectas a esa red, se abre la página de configuración (o entra a http://192.168.4.1), eliges la WiFi del cliente, su contraseña y el idioma (*Search again* vuelve a buscar redes). La báscula se reinicia y se conecta. La pantalla muestra también un **QR**: con la cámara del móvil te une a esa red sin escribir la clave. Para cambiar la WiFi más tarde: mantén pulsada la cabecera de la pantalla 3 segundos → PIN (si el portal tiene uno puesto) → menú → *WI-FI*. Si ya hay una WiFi guardada, la pantalla de configuración tiene el botón **EXIT SETUP** para salir sin cambiar nada, y se cierra sola a los 10 minutos volviendo a la WiFi guardada (sin reiniciar).
+   **Si la WiFi guardada no aparece en 1:30** (router nuevo, clave cambiada), la báscula abre sola esa red de configuración con el QR, y la cierra a los 10 minutos para volver a buscar la WiFi guardada. Nunca lo hace a mitad de un pesaje, y los pesajes hechos sin conexión siguen guardados. Mientras ningún móvil está conectado a esa red, sigue buscando la WiFi guardada y, si vuelve, la cierra sola. Si el portal tiene PIN puesto, la página de configuración de esa red lo pide. Los dos tiempos se cambian en el portal (*Settings > Weighing*).
+   **PIN de Ajustes.** El administrador pone un PIN de 4 cifras en el portal (*Settings > Weighing*). La báscula lo pide para abrir Ajustes; 3 fallos la bloquean 1 minuto. Sin PIN puesto, Ajustes se abre directamente. La placa solo guarda una huella del PIN, nunca el PIN.
    En *Advanced* se puede cambiar el servidor: solo se acepta `wss://` (cifrado). Al cambiarlo, la báscula borra su alta y hay que darla de alta otra vez en el portal nuevo.
 2. **Hora.** Al arrancar espera hasta 1:30 a tener la hora (por internet o del DS3231 si lo lleva). Si pasado ese tiempo sigue sin hora, pesa igual: el portal pone la hora de llegada a esos pesos y los marca como hora aproximada.
 3. **Alta en el portal.** La pantalla muestra un **código de 6 dígitos**. El administrador del cliente entra en el portal → *Scales* → *Add scale*, escribe el código, elige la planta y el nombre. El portal le da su número (**B1**, **B2**…), que queda siempre visible en la pantalla.
@@ -53,13 +55,17 @@ y reinicia el IDE. Sin él también funciona, pero con 5 s por intento. Al arran
 ## Cómo pesa
 
 1. El operario escanea el QR del tarro en el portal y elige la báscula.
-2. La pantalla muestra el producto, el lote y el tarro: primero pide la balanza vacía (en cero) y luego **Place jar**.
+2. La pantalla muestra el producto, el lote y el tarro. Primero pide la balanza vacía: el peso tiene que quedar entre -0,5 y +0,5 g **seguido 1 segundo** (pantalla *Estabilizando* con barra), igual que la dosificadora. Si no está en cero sale *Vacía la balanza* en ámbar: la tara se hace con el botón de la balanza, el firmware nunca hace tara. Luego **Place jar**.
 3. Cuando el peso está estable 2 segundos, lo captura y lo manda. Hay botón **Cancel**.
 4. El resultado sale en pantalla: **verde** dentro de tolerancia; **ámbar** fuera de tolerancia (el tarro queda retenido hasta que un supervisor lo apruebe o lo rechace a cuarentena en el portal); **rojo** si el portal lo rechaza; **azul** si se guardó sin conexión y se mandará solo.
 
 Sin WiFi o sin servidor, los pesos se guardan en la placa (hasta 400) y se mandan solos cuando vuelve la conexión; el portal confirma cada uno y no los duplica.
 
-La tolerancia (±1 g por defecto), el tiempo de estabilidad y los demás ajustes se cambian en el portal, por cliente y por producto; la báscula los recibe sola.
+La tolerancia (±1 g por defecto), el tiempo de estabilidad, la banda de cero (±0,5 g) y su tiempo (1 s) y los demás ajustes se cambian en el portal, por cliente y por producto; la báscula los recibe sola.
+
+## Modo demo
+
+Para enseñar SolderTrace sin balanza. Solo 4allfix lo enciende, en el portal, para un **cliente demo** (*Settings > Weighing*, apagado por defecto): todas las básculas de ese cliente pasan a balanza emulada, así los pesajes de demo nunca se mezclan con envases reales. La cabecera muestra **DEMO** y los pesajes van marcados como demo. Al pesar, la pantalla tiene botones: **Poner envase** (un peso cerca del esperado), **Fuera de rango** (para probar el ámbar) y **Quitar envase**. El resto es igual que con la balanza real: el portal pide el pesaje, la báscula captura el peso estable y lo manda.
 
 ## Actualizar por WiFi (OTA)
 

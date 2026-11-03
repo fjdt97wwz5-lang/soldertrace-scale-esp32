@@ -20,6 +20,11 @@ struct Settings {
   bool enabled = true;
   float stableBand, zeroTol, minJar;
   uint32_t stableMs;
+  uint32_t zeroHoldMs;       // tiempo seguido dentro de la banda de cero
+  uint32_t wifiWaitS;        // sin la WiFi guardada este tiempo = abre su red de configuracion
+  uint32_t apTimeoutMin;     // la red de configuracion se cierra sola
+  char pinHash[136] = "";     // "<sal>$<sha256 hex>" del PIN de Ajustes ("" = sin PIN)
+  bool demo = false;         // modo demo: balanza emulada, pesajes marcados como demo
 };
 
 struct QueuedReading {        // 64 bytes
@@ -28,7 +33,8 @@ struct QueuedReading {        // 64 bytes
   float    grams;
   uint8_t  stable;
   uint8_t  approx;            // hora aproximada
-  uint8_t  pad[2];
+  uint8_t  demo;              // pesaje hecho en modo demo
+  uint8_t  pad[1];
   char     requestId[48];
 };
 
@@ -39,7 +45,7 @@ extern uint32_t ackedUpTo;   // ultimo confirmado por el servidor
 void storeBegin();
 void storeSave();            // guarda cfg
 void storeClearPairing();
-uint32_t queueAdd(const char* requestId, float grams, bool stable);
+uint32_t queueAdd(const char* requestId, float grams, bool stable, bool demo);
 int  queueCount();                        // pendientes (RAM, no lee el archivo)
 int  queueCountUpTo(uint32_t seq);        // pendientes con numero <= seq (RAM)
 int  queueRead(uint32_t afterSeq, QueuedReading* out, int max);  // pendientes con numero > afterSeq, en orden, una pasada
